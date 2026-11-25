@@ -41,7 +41,9 @@ enum Html {
                   let dub = Regex.group(match, content, 3),
                   let key = supportedPlayers[playerTitle] else { return nil }
             // AniBoom и прочие не поддерживаем
-            return ProviderItem(key: key, url: "https:" + unescapeHtml(rawUrl), dub: dub)
+            // (в разметке встречаются и "//host/…", и готовый "https://host/…")
+            let raw = unescapeHtml(rawUrl)
+            return ProviderItem(key: key, url: raw.hasPrefix("//") ? "https:" + raw : raw, dub: dub)
         }
     }
 

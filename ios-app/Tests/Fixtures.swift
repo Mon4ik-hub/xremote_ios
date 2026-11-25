@@ -18,7 +18,7 @@ enum Fixtures {
     static let emptyHtml = "<div>серий нет</div>"
 
     static let providersHtml = """
-    <button data-player="https://s3.cdnvideohub.com/public/cdn-iframe/123/Dream&#x20;Cast/1/1?scene=1" data-provider-title="CVH" data-translation-title="Dream Cast"></button>
+    <button data-player="//s3.cdnvideohub.com/public/cdn-iframe/123/Dream&#x20;Cast/1/1?scene=1" data-provider-title="CVH" data-translation-title="Dream Cast"></button>
     <button data-player="https://kodik.info/find-player?shikimori=1&amp;bad=false" data-provider-title="Kodik" data-translation-title="AniLiberty"></button>
     <button data-player="https://aniboom.one/embed/x" data-provider-title="AniBoom" data-translation-title="Dream Cast"></button>
     """

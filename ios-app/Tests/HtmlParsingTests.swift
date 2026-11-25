@@ -26,6 +26,7 @@ final class HtmlParsingTests: XCTestCase {
         let providers = Html.providers(from: Fixtures.providersHtml)
         XCTAssertEqual(providers.map { $0.key }, ["cvh", "kodik"])
         XCTAssertEqual(providers.map { $0.dub }, ["Dream Cast", "AniLiberty"])
+        // data-player бывает и протокол-относительным ("//…"), и абсолютным ("https://…")
         XCTAssertEqual(providers[0].url, "https://s3.cdnvideohub.com/public/cdn-iframe/123/Dream Cast/1/1?scene=1")
         XCTAssertEqual(providers[1].url, "https://kodik.info/find-player?shikimori=1&bad=false")
     }
