@@ -5,16 +5,16 @@ final class AppLogTests: XCTestCase {
     func testWriteReadAndClear() {
         let log = AppLog.shared
         log.clear()
-        // clear асинхронный — даём очередь отработать
-        let expectation = expectation(description: "clear")
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) { expectation.fulfill() }
-        wait(for: [expectation], timeout: 2)
+        // clear асинхронный — даём очереди отработать
+        let cleared = XCTestExpectation(description: "clear")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) { cleared.fulfill() }
+        wait(for: [cleared], timeout: 2)
 
         log.log("строка 1")
         log.log("строка 2")
-        let drain = expectation(description: "append")
-        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) { drain.fulfill() }
-        wait(for: [drain], timeout: 2)
+        let appended = XCTestExpectation(description: "append")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) { appended.fulfill() }
+        wait(for: [appended], timeout: 2)
 
         let text = log.text()
         XCTAssertTrue(text.contains("строка 1"))
