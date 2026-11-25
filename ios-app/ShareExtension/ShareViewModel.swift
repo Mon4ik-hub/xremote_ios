@@ -169,7 +169,7 @@ final class ShareViewModel: ObservableObject {
         canFinish = true
     }
 
-    static func errorText(_ error: Error) -> String {
+    nonisolated static func errorText(_ error: Error) -> String {
         if let localized = error as? LocalizedError, let text = localized.errorDescription {
             return text
         }
