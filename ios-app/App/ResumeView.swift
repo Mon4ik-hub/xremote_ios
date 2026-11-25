@@ -190,6 +190,7 @@ final class ResumeViewModel: ObservableObject {
     }
 
     func cast(_ episode: Episode, profiles: TvProfileStore, history: HistoryStore) async {
+        AppLog.shared.log("Продолжить: отправка эп.\(episode.number) (плеер=\(playerKey)/\(selectedDub))")
         guard let profile = profiles.lastUsed ?? profiles.profiles.first else {
             statusText = "Нет телевизора — настройте профиль в расширении"
             isError = true

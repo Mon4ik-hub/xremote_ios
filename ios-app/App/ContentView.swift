@@ -79,12 +79,14 @@ struct ContentView: View {
         let count = UIPasteboard.general.changeCount
         guard count != defaults.integer(forKey: countKey) else { return }
         defaults.set(count, forKey: countKey)
+        AppLog.shared.log("Приложение: буфер изменился (count=\(count)), проверяю payload")
         guard let payload = HistoryPasteboard.readPayload() else { return }
         HistoryPasteboard.clear()
         applyHandoff(payload)
     }
 
     private func applyHandoff(_ payload: HistoryHandoff.Payload) {
+        AppLog.shared.log("Приложение: handoff — \(payload.title) эп.\(payload.episodeNumber)")
         history.upsert(url: payload.url, title: payload.title, episodeNumber: payload.episodeNumber)
         if let name = payload.tvName, let host = payload.tvHost, let port = payload.tvPort {
             profiles.upsert(name: name, host: host, port: port)

@@ -119,16 +119,22 @@ final class XRemoteClient {
                 break
             }
         }
+        AppLog.shared.log("XRemote.connect \(host):\(port)")
         connection.start(queue: DispatchQueue(label: "ru.mon4ik.animegocast.xremote"))
 
-        guard waitUntil(semaphore, deadline: deadline) else { throw XRemoteError.timeout }
+        guard waitUntil(semaphore, deadline: deadline) else {
+            AppLog.shared.log("XRemote.connect: таймаут")
+            throw XRemoteError.timeout
+        }
         if let failure = failure.get() {
             if case XRemoteError.connectionClosed = failure, connection.state == .ready {
                 // отмена после готовности — нормальное завершение, не ошибка подключения
             } else {
+                AppLog.shared.log("XRemote.connect: ошибка — \(failure)")
                 throw failure
             }
         }
+        AppLog.shared.log("XRemote.connect: готово")
         return connection
     }
 
@@ -142,13 +148,18 @@ final class XRemoteClient {
         connection.send(content: Data(text.utf8), completion: .contentProcessed { (error: NWError?) in
             if let error {
                 failure.set(XRemoteError.connectionFailed(error.localizedDescription))
+                AppLog.shared.log("XRemote.send: ошибка — \(error)")
             }
             semaphore.signal()
         })
-        guard waitUntil(semaphore, deadline: deadline) else { throw XRemoteError.timeout }
+        guard waitUntil(semaphore, deadline: deadline) else {
+            AppLog.shared.log("XRemote.send: таймаут")
+            throw XRemoteError.timeout
+        }
         if let failure = failure.get() {
             throw failure
         }
+        AppLog.shared.log("XRemote.send: отправлено (\(text.count) байт)")
     }
 
     private func readResponse(on connection: NWConnection, deadline: Date) throws -> XRemoteResponse {
@@ -157,7 +168,10 @@ final class XRemoteClient {
             if let response = try takeResponse(from: &buffer) {
                 return response
             }
-            guard Date() < deadline else { throw XRemoteError.timeout }
+            guard Date() < deadline else {
+                AppLog.shared.log("XRemote.read: таймаут без ответа")
+                throw XRemoteError.timeout
+            }
 
             let semaphore = DispatchSemaphore(value: 0)
             let failure = Locked<Error?>(nil)
@@ -194,8 +208,10 @@ final class XRemoteClient {
             throw XRemoteError.badResponse("пустая строка")
         }
         guard let object = (try? JSONSerialization.jsonObject(with: lineData)) as? [String: Any] else {
+            AppLog.shared.log("XRemote.read: не JSON — \(line.prefix(120))")
             throw XRemoteError.badResponse(String(line.prefix(200)))
         }
+        AppLog.shared.log("XRemote.read: ответ \(line.prefix(120))")
         return XRemoteResponse(raw: line, json: object)
     }
 

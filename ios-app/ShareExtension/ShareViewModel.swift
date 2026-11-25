@@ -88,6 +88,7 @@ final class ShareViewModel: ObservableObject {
     // MARK: - Вход и загрузка страницы
 
     func handleIncomingURL(_ url: URL?) async {
+        AppLog.shared.log("Панель: вход url=\(url?.absoluteString ?? "nil")")
         guard let url, isAnimeTitlePage(url) else {
             fail("Это не страница аниме на animego.me")
             return
@@ -113,6 +114,7 @@ final class ShareViewModel: ObservableObject {
             )
             episodes = loadedEpisodes
             statusText = loadedEpisodes.isEmpty ? "Серии не найдены" : "Найдено серий: \(loadedEpisodes.count)"
+            AppLog.shared.log("Панель: «\(loadedMeta.title)» id=\(loadedMeta.animeId), серий \(loadedEpisodes.count)")
             canFinish = true
             if let first = loadedEpisodes.first {
                 providersPreview = (try? await animego.fetchProviders(
@@ -139,6 +141,7 @@ final class ShareViewModel: ObservableObject {
     }
 
     func cast(_ episode: Episode, to profile: TvProfile) async {
+        AppLog.shared.log("Панель: отправка эп.\(episode.number) на «\(profile.name)» (\(playerKey)/\(selectedDub))")
         casting = true
         statusText = "Ищу ссылку…"
         isError = false
@@ -164,6 +167,7 @@ final class ShareViewModel: ObservableObject {
             let response = try await client.send(payload)
             try CastResolver.requireSuccess(response)
             statusText = "Запущено на «\(profile.name)»: эпизод \(episode.number), \(resolved.qualityName)"
+            AppLog.shared.log("Панель: COMMAND_SUCCESS, эп.\(episode.number) на «\(profile.name)»")
             store.markUsed(id: profile.id)
             watchedStore.markWatched(episode.id) // отправленная серия = просмотренная
             watched = watchedStore.all()
@@ -185,6 +189,7 @@ final class ShareViewModel: ObservableObject {
             // панель остаётся открытой: ссылка для кнопки «Записать в историю приложения»
             handoffURL = HistoryHandoff.makeURL(handoffPayload)
         } catch {
+            AppLog.shared.log("Панель: ошибка отправки — \(AppError.humanText(error))")
             fail(AppError.humanText(error))
             onPopToRoot?()
         }
@@ -193,10 +198,15 @@ final class ShareViewModel: ObservableObject {
     /// По нажатию кнопки: открыть приложение и записать тайтл в «Историю».
     func recordToApp() {
         guard let handoffURL else { return }
+        AppLog.shared.log("Панель: «Записать в историю» — открываю приложение")
         onOpenApp?(handoffURL) { [weak self] opened in
-            if !opened {
+            if opened {
+                AppLog.shared.log("Панель: приложение открылось, история записана")
+            } else {
                 self?.statusText = "Не удалось открыть приложение — история не записана"
                 self?.isError = true
+                self?.canFinish = true
+                AppLog.shared.log("Панель: open() отклонён iOS")
             }
         }
     }

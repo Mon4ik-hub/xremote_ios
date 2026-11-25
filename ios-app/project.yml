@@ -35,6 +35,8 @@ targets:
           - CFBundleURLName: com.mon4ik.animegocast
             CFBundleURLSchemes:
               - animegocast
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mon4ik.animegocast

@@ -3,6 +3,7 @@ import SwiftUI
 /// Главный экран расширения: тайтл, плееры, список серий, одна строка статуса.
 struct ShareView: View {
     @ObservedObject var viewModel: ShareViewModel
+    @State private var showingLog = false
 
     var body: some View {
         Form {
@@ -78,8 +79,15 @@ struct ShareView: View {
                 if viewModel.canFinish {
                     Button("Готово") { viewModel.finish() }
                 }
+                Button("Журнал") {
+                    showingLog = true
+                }
+                .font(.footnote)
             }
         }
         .navigationTitle("AnimeGO Cast")
+        .sheet(isPresented: $showingLog) {
+            LogSheet()
+        }
     }
 }

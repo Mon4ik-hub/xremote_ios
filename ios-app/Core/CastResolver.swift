@@ -34,11 +34,18 @@ enum CastResolver {
         http: HttpClient,
         onProgress: @MainActor (String) -> Void = { _ in }
     ) async throws -> Resolved {
+        AppLog.shared.log(
+            "Resolve: эп.\(query.episode.number) плеер=\(query.playerKey) озвучка=\(query.selectedDub)"
+        )
         let providers = try await AnimeGoClient(http: http)
             .fetchProviders(animeUrl: query.urlString, episodeId: query.episode.id)
         let playerProviders = providers.filter { $0.key == query.playerKey }
+        AppLog.shared.log(
+            "Resolve: провайдеров \(providers.count), для плеера — \(playerProviders.count)"
+        )
         guard !playerProviders.isEmpty else {
             let other = playerName(query.playerKey == "cvh" ? "kodik" : "cvh")
+            AppLog.shared.log("Resolve: плеера нет у эпизода")
             throw AppError.cast(
                 "У этого эпизода нет плеера \(playerName(query.playerKey)) — выберите \(other) в настройках"
             )
@@ -53,9 +60,15 @@ enum CastResolver {
                 let previous = candidates[index - 1].dub
                 onProgress("Озвучка «\(previous)» не подошла, пробую «\(provider.dub)»…")
             }
+            AppLog.shared.log("Resolve: попытка \(index + 1)/\(candidates.count) — \(provider.dub)")
             do {
-                return try await resolveOne(provider, query: query, http: http)
+                let resolved = try await resolveOne(provider, query: query, http: http)
+                AppLog.shared.log(
+                    "Resolve: успех \(resolved.qualityName) через \(resolved.providerKey)/\(resolved.dub)"
+                )
+                return resolved
             } catch {
+                AppLog.shared.log("Resolve: попытка не удалась — \(AppError.humanText(error))")
                 lastError = error
             }
         }
