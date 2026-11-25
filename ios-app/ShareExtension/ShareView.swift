@@ -72,6 +72,9 @@ struct ShareView: View {
             Section {
                 Text(viewModel.statusText)
                     .foregroundStyle(viewModel.isError ? AnyShapeStyle(.red) : AnyShapeStyle(.primary))
+                if viewModel.handoffURL != nil {
+                    Button("Записать в историю приложения") { viewModel.recordToApp() }
+                }
                 if viewModel.canFinish {
                     Button("Готово") { viewModel.finish() }
                 }

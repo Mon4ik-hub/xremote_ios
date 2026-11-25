@@ -28,8 +28,12 @@ final class ShareViewModel: ObservableObject {
     var onShowProfiles: (() -> Void)?
     var onShowTVPicker: ((Episode) -> Void)?
     var onPopToRoot: (() -> Void)?
-    /// Открыть приложение с handoff-ссылкой (запись в «Историю»).
-    var onOpenApp: ((URL) -> Void)?
+    /// Открыть приложение с handoff-ссылкой (запись в «Историю»); работает,
+    /// только если вызвать прямо по нажатию кнопки — отложенный вызов iOS
+    /// отклоняет и просто закрывает панель.
+    var onOpenApp: ((URL, @escaping (Bool) -> Void) -> Void)?
+    /// Ссылка для кнопки «Записать в историю приложения» (после успешной отправки).
+    @Published private(set) var handoffURL: URL?
 
     private let http = HttpClient()
     private lazy var animego = AnimeGoClient(http: http)
@@ -138,6 +142,7 @@ final class ShareViewModel: ObservableObject {
         casting = true
         statusText = "Ищу ссылку…"
         isError = false
+        handoffURL = nil
         defer { casting = false }
         do {
             guard let meta, let urlString = inputURL?.absoluteString else {
@@ -163,8 +168,8 @@ final class ShareViewModel: ObservableObject {
             watchedStore.markWatched(episode.id) // отправленная серия = просмотренная
             watched = watchedStore.all()
 
-            // успешная отправка уходит в историю приложения (без App Groups — через URL)
-            if let handoff = HistoryHandoff.makeURL(.init(
+            // панель остаётся открытой: ссылка для кнопки «Записать в историю приложения»
+            handoffURL = HistoryHandoff.makeURL(.init(
                 url: urlString,
                 title: meta.title,
                 episodeNumber: episode.number,
@@ -174,14 +179,21 @@ final class ShareViewModel: ObservableObject {
                 tvPort: profile.port,
                 playerKey: playerKey,
                 dub: selectedDub
-            )) {
-                onOpenApp?(handoff)
-            } else {
-                onPopToRoot?()
-            }
+            ))
         } catch {
             fail(AppError.humanText(error))
             onPopToRoot?()
+        }
+    }
+
+    /// По нажатию кнопки: открыть приложение и записать тайтл в «Историю».
+    func recordToApp() {
+        guard let handoffURL else { return }
+        onOpenApp?(handoffURL) { [weak self] opened in
+            if !opened {
+                self?.statusText = "Не удалось открыть приложение — история не записана"
+                self?.isError = true
+            }
         }
     }
 

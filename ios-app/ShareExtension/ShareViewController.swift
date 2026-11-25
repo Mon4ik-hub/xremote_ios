@@ -29,11 +29,18 @@ final class ShareViewController: UIViewController {
         viewModel.onPopToRoot = { [weak self] in
             self?.navController?.popToRootViewController(animated: true)
         }
-        viewModel.onOpenApp = { [weak self] url in
-            // handoff в приложение: записать историю; после открытия расширение закрывается
-            guard let context = self?.extensionContext else { return }
-            context.open(url) { _ in
-                context.completeRequest(returningItems: nil, completionHandler: nil)
+        viewModel.onOpenApp = { [weak self] url, completion in
+            // handoff в приложение (по кнопке «Записать в историю»): если открылось —
+            // расширение завершается, иначе остаёмся с подсказкой
+            guard let context = self?.extensionContext else {
+                completion(false)
+                return
+            }
+            context.open(url) { opened in
+                if opened {
+                    context.completeRequest(returningItems: nil, completionHandler: nil)
+                }
+                completion(opened)
             }
         }
         Task { await loadIncomingURL() }
