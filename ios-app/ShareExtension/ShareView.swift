@@ -17,10 +17,23 @@ struct ShareView: View {
                 }
                 Button("Профили") { viewModel.onShowProfiles?() }
             }
-            if !providerLines.isEmpty {
-                Section("Плееры (серия 1)") {
-                    ForEach(providerLines, id: \.self) { line in
-                        Text(line)
+            if !viewModel.dubOptions.isEmpty {
+                Section("Настройки") {
+                    Picker("Плеер", selection: Binding(
+                        get: { viewModel.playerKey },
+                        set: { viewModel.selectPlayer($0) }
+                    )) {
+                        Text("CVH").tag("cvh")
+                        Text("Kodik").tag("kodik")
+                    }
+                    .pickerStyle(.segmented)
+                    Picker("Озвучка", selection: Binding(
+                        get: { viewModel.selectedDub },
+                        set: { viewModel.selectDub($0) }
+                    )) {
+                        ForEach(viewModel.dubOptions, id: \.self) { dub in
+                            Text(dub).tag(dub)
+                        }
                     }
                 }
             }
@@ -41,19 +54,5 @@ struct ShareView: View {
             }
         }
         .navigationTitle("AnimeGO Cast")
-    }
-
-    /// «CVH: Dream Cast, AniLiberty» / «Kodik: …»
-    private var providerLines: [String] {
-        var lines: [String] = []
-        for (key, title) in [("cvh", "CVH"), ("kodik", "Kodik")] {
-            let dubs = viewModel.providersPreview
-                .filter { $0.key == key }
-                .map { $0.dub }
-            if !dubs.isEmpty {
-                lines.append("\(title): \(dubs.joined(separator: ", "))")
-            }
-        }
-        return lines
     }
 }

@@ -10,10 +10,16 @@ final class ShareViewModel: ObservableObject {
     @Published var casting = false
     @Published var meta: AnimeMeta?
     @Published var episodes: [Episode] = []
-    /// Плееры первой серии — чтобы показать плеер и озвучки ещё до отправки.
+    /// Плееры первой серии: из них собираются озвучки выбранного плеера.
     @Published var providersPreview: [ProviderItem] = []
     @Published private(set) var store: TvProfileStore
+    /// Плеер по умолчанию выбирает пользователь ("cvh" | "kodik").
+    @Published private(set) var playerKey: String
+    /// Выбранная озвучка (зависит от плеера); пустая строка — «первая доступная».
+    @Published private(set) var selectedDub: String
     private(set) var inputURL: URL?
+
+    private let prefs = CastPreferences()
 
     var onFinish: (() -> Void)?
     var onShowProfiles: (() -> Void)?
@@ -25,6 +31,42 @@ final class ShareViewModel: ObservableObject {
 
     init(store: TvProfileStore = TvProfileStore()) {
         self.store = store
+        playerKey = prefs.playerKey
+        selectedDub = prefs.dub
+    }
+
+    // MARK: - Выбор плеера и озвучки
+
+    /// Доступные озвучки выбранного плеера (по первой серии).
+    var dubOptions: [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for provider in providersPreview where provider.key == playerKey {
+            if seen.insert(provider.dub).inserted {
+                out.append(provider.dub)
+            }
+        }
+        return out
+    }
+
+    func selectPlayer(_ key: String) {
+        playerKey = key
+        prefs.playerKey = key
+        normalizeDub()
+    }
+
+    func selectDub(_ dub: String) {
+        selectedDub = dub
+        prefs.dub = dub
+    }
+
+    /// Если выбранная озвучка недоступна у нового плеера — берём первую из списка.
+    private func normalizeDub() {
+        let options = dubOptions
+        if !options.contains(selectedDub) {
+            selectedDub = options.first ?? ""
+        }
+        prefs.dub = selectedDub
     }
 
     // MARK: - Вход и загрузка страницы
@@ -61,6 +103,7 @@ final class ShareViewModel: ObservableObject {
                     animeUrl: url.absoluteString,
                     episodeId: first.id
                 )) ?? []
+                normalizeDub()
             }
         } catch {
             fail(Self.errorText(error))
@@ -103,21 +146,25 @@ final class ShareViewModel: ObservableObject {
             throw AppError.cast("Страница ещё не загружена")
         }
         let providers = try await animego.fetchProviders(animeUrl: urlString, episodeId: episode.id)
-        let candidates = castCandidates(providers)
-        guard !candidates.isEmpty else {
-            throw AppError.cast("У этого эпизода нет поддерживаемых плееров (нужны CVH или Kodik)")
+        let playerProviders = providers.filter { $0.key == playerKey }
+        guard !playerProviders.isEmpty else {
+            let other = Self.playerName(playerKey == "cvh" ? "kodik" : "cvh")
+            throw AppError.cast(
+                "У этого эпизода нет плеера \(Self.playerName(playerKey)) — выберите \(other) в настройках"
+            )
         }
 
-        // Ссылку получаем в последний момент и сразу возвращаем — CVH-ссылки
-        // короткоживущие и не перезапрашиваются. Если CVH не сработал (например,
-        // пустой плейлист) — пробуем Kodik и остальные озвучки.
+        // Плеер выбирает пользователь: сначала выбранная озвучка, затем остальные
+        // озвучки ТОГО ЖЕ плеера (автоподмены плеера нет). Ссылку получаем в
+        // последний момент и сразу отправляем — CVH-ссылки короткоживущие.
+        let chosen = playerProviders.first { $0.dub == selectedDub }
+        let candidates = [chosen].compactMap { $0 } + playerProviders.filter { $0.dub != selectedDub }
+
         var lastError: Error?
-        let attempts = Array(candidates.prefix(4))
-        for (index, provider) in attempts.enumerated() {
+        for (index, provider) in candidates.enumerated() {
             if index > 0 {
-                statusText = attempts[index - 1].key == "cvh"
-                    ? "CVH не сработал, пробую Kodik…"
-                    : "Пробую другой плеер…"
+                let previous = candidates[index - 1].dub
+                statusText = "Озвучка «\(previous)» не подошла, пробую «\(provider.dub)»…"
             }
             do {
                 return try await extractAndBuild(provider: provider, episode: episode, title: meta.title)
@@ -125,12 +172,25 @@ final class ShareViewModel: ObservableObject {
                 lastError = error
             }
         }
+        let available = playerProviders.map { $0.dub }.joined(separator: ", ")
         let reason = Self.errorText(lastError ?? AppError.parse("неизвестно"))
-        throw AppError.cast("Ни один плеер не дал ссылку. Последняя ошибка: \(reason)")
+        let other = Self.playerName(playerKey == "cvh" ? "kodik" : "cvh")
+        throw AppError.cast(
+            "Плеер \(Self.playerName(playerKey)) не дал ссылку (озвучки: \(available)). \(reason)"
+            + " Можно попробовать плеер \(other) в настройках."
+        )
+    }
+
+    static func playerName(_ key: String) -> String {
+        key == "cvh" ? "CVH" : "Kodik"
     }
 
     /// Извлечение прямой ссылки одного плеера и сборка сообщения.
-    private func extractAndBuild(provider: ProviderItem, episode: Episode, title: String) async throws -> (message: Data, qualityName: String) {
+    private func extractAndBuild(
+        provider: ProviderItem,
+        episode: Episode,
+        title: String
+    ) async throws -> (message: Data, qualityName: String) {
         let streams: [VideoStream]
         let season: String
         if provider.key == "cvh" {
