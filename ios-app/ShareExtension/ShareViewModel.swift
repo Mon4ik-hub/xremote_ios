@@ -170,7 +170,7 @@ final class ShareViewModel: ObservableObject {
 
             // Автозапись истории через буфер обмена: приложение импортирует её
             // при следующем открытии (без App Groups это единственный канал).
-            let payload = HistoryHandoff.Payload(
+            let handoffPayload = HistoryHandoff.Payload(
                 url: urlString,
                 title: meta.title,
                 episodeNumber: episode.number,
@@ -181,9 +181,9 @@ final class ShareViewModel: ObservableObject {
                 playerKey: playerKey,
                 dub: selectedDub
             )
-            HistoryPasteboard.write(payload)
+            HistoryPasteboard.write(handoffPayload)
             // панель остаётся открытой: ссылка для кнопки «Записать в историю приложения»
-            handoffURL = HistoryHandoff.makeURL(payload)
+            handoffURL = HistoryHandoff.makeURL(handoffPayload)
         } catch {
             fail(AppError.humanText(error))
             onPopToRoot?()
