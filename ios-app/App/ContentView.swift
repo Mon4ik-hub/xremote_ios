@@ -20,7 +20,8 @@ struct ContentView: View {
                                 VStack(alignment: .leading) {
                                     Text(entry.title)
                                         .lineLimit(1)
-                                    Text("эпизод \(entry.episodeNumber) · \(entry.watchedAt.formatted(date: .abbreviated, time: .shortened))")
+                                    Text("эпизод \(entry.episodeNumber) · "
+                                            + entry.watchedAt.formatted(date: .abbreviated, time: .shortened))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
