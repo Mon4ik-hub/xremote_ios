@@ -13,4 +13,12 @@ enum AppError: LocalizedError {
         case .cast(let message): return message
         }
     }
+
+    /// Человекочитаемый текст любой ошибки (и для панели, и для приложения).
+    static func humanText(_ error: Error) -> String {
+        if let localized = error as? LocalizedError, let text = localized.errorDescription {
+            return text
+        }
+        return error.localizedDescription
+    }
 }

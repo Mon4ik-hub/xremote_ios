@@ -28,6 +28,8 @@ final class ShareViewModel: ObservableObject {
     var onShowProfiles: (() -> Void)?
     var onShowTVPicker: ((Episode) -> Void)?
     var onPopToRoot: (() -> Void)?
+    /// Открыть приложение с handoff-ссылкой (запись в «Историю»).
+    var onOpenApp: ((URL) -> Void)?
 
     private let http = HttpClient()
     private lazy var animego = AnimeGoClient(http: http)
@@ -138,122 +140,48 @@ final class ShareViewModel: ObservableObject {
         isError = false
         defer { casting = false }
         do {
-            let resolved = try await resolveCast(episode: episode)
+            guard let meta, let urlString = inputURL?.absoluteString else {
+                throw AppError.cast("Страница ещё не загружена")
+            }
+            let resolved = try await CastResolver.resolve(
+                .init(
+                    episode: episode,
+                    title: meta.title,
+                    urlString: urlString,
+                    playerKey: playerKey,
+                    selectedDub: selectedDub
+                ),
+                http: http,
+                onProgress: { statusText = $0 }
+            )
             let client = try XRemoteClient(host: profile.host, port: profile.port)
             let payload = String(decoding: resolved.message, as: UTF8.self)
             let response = try await client.send(payload)
-            try requireSuccess(response)
+            try CastResolver.requireSuccess(response)
             statusText = "Запущено на «\(profile.name)»: эпизод \(episode.number), \(resolved.qualityName)"
             store.markUsed(id: profile.id)
             watchedStore.markWatched(episode.id) // отправленная серия = просмотренная
             watched = watchedStore.all()
+
+            // успешная отправка уходит в историю приложения (без App Groups — через URL)
+            if let handoff = HistoryHandoff.makeURL(.init(
+                url: urlString,
+                title: meta.title,
+                episodeNumber: episode.number,
+                episodeId: episode.id,
+                tvName: profile.name,
+                tvHost: profile.host,
+                tvPort: profile.port,
+                playerKey: playerKey,
+                dub: selectedDub
+            )) {
+                onOpenApp?(handoff)
+            } else {
+                onPopToRoot?()
+            }
         } catch {
-            fail(Self.errorText(error))
-        }
-        onPopToRoot?()
-    }
-
-    private func resolveCast(episode: Episode) async throws -> (message: Data, qualityName: String) {
-        guard let meta, let urlString = inputURL?.absoluteString else {
-            throw AppError.cast("Страница ещё не загружена")
-        }
-        let providers = try await animego.fetchProviders(animeUrl: urlString, episodeId: episode.id)
-        let playerProviders = providers.filter { $0.key == playerKey }
-        guard !playerProviders.isEmpty else {
-            let other = Self.playerName(playerKey == "cvh" ? "kodik" : "cvh")
-            throw AppError.cast(
-                "У этого эпизода нет плеера \(Self.playerName(playerKey)) — выберите \(other) в настройках"
-            )
-        }
-
-        // Плеер выбирает пользователь: сначала выбранная озвучка, затем остальные
-        // озвучки ТОГО ЖЕ плеера (автоподмены плеера нет). Ссылку получаем в
-        // последний момент и сразу отправляем — CVH-ссылки короткоживущие.
-        let chosen = playerProviders.first { $0.dub == selectedDub }
-        let candidates = [chosen].compactMap { $0 } + playerProviders.filter { $0.dub != selectedDub }
-
-        var lastError: Error?
-        for (index, provider) in candidates.enumerated() {
-            if index > 0 {
-                let previous = candidates[index - 1].dub
-                statusText = "Озвучка «\(previous)» не подошла, пробую «\(provider.dub)»…"
-            }
-            do {
-                return try await extractAndBuild(provider: provider, episode: episode, title: meta.title)
-            } catch {
-                lastError = error
-            }
-        }
-        let available = playerProviders.map { $0.dub }.joined(separator: ", ")
-        let reason = Self.errorText(lastError ?? AppError.parse("неизвестно"))
-        let other = Self.playerName(playerKey == "cvh" ? "kodik" : "cvh")
-        throw AppError.cast(
-            "Плеер \(Self.playerName(playerKey)) не дал ссылку (озвучки: \(available)). \(reason)"
-            + " Можно попробовать плеер \(other) в настройках."
-        )
-    }
-
-    static func playerName(_ key: String) -> String {
-        key == "cvh" ? "CVH" : "Kodik"
-    }
-
-    /// Извлечение прямой ссылки одного плеера и сборка сообщения.
-    private func extractAndBuild(
-        provider: ProviderItem,
-        episode: Episode,
-        title: String
-    ) async throws -> (message: Data, qualityName: String) {
-        let streams: [VideoStream]
-        let season: String
-        if provider.key == "cvh" {
-            let extracted = try await CvhExtractor.extract(http, embedUrl: provider.url)
-            streams = extracted.streams
-            season = "\(extracted.item.season) сезон" // сезон берётся из плейлиста CVH
-        } else {
-            streams = try await KodikExtractor.extract(http, embedUrl: provider.url)
-            season = "1 сезон" // у Kodik сезон неизвестен
-        }
-        guard let stream = pickMp4(streams, maxQuality: provider.key == "cvh" ? "1080" : "720") else {
-            throw AppError.cast("Плеер отдал только HLS, прямого mp4 нет")
-        }
-        var headers = ["Referer": "https://animego.org/"]
-        if provider.key == "cvh", srcAg(of: stream.url) != "CHROME" {
-            headers["User-Agent"] = HttpClient.browserUA
-        }
-        let qualityName = "\(stream.quality ?? 0)p"
-        let message = try CastMessage.playVideo(.init(
-            contentId: "animego/" + episode.id,
-            title: title,
-            season: season,
-            translation: provider.dub,
-            episode: "\(episode.number) серия",
-            qualityName: qualityName,
-            directUrl: stream.url,
-            embedUrl: provider.url,
-            headersForDirect: headers
-        ))
-        return (message, qualityName)
-    }
-
-    /// Тип клиента в параметре srcAg: плеер AniLabX ходит как Chrome.
-    private func srcAg(of url: String) -> String? {
-        Regex("[?&]srcAg=([^&]+)").firstGroup(in: url)
-    }
-
-    private func requireSuccess(_ response: XRemoteResponse) throws {
-        switch response.response {
-        case "COMMAND_SUCCESS":
-            break
-        case "COMMAND_FAIL":
-            throw AppError.cast("Сервер отверг команду (COMMAND_FAIL)")
-        case "VERSION_INCOMPATIBLE":
-            throw AppError.cast("Версия AniLabX несовместима с приложением (VERSION_INCOMPATIBLE)")
-        case "EXCEPTION":
-            throw AppError.cast("На сервере AniLabX произошло исключение (EXCEPTION)")
-        case .some(let other):
-            throw AppError.cast("Неожиданный ответ сервера: \(other)")
-        case nil:
-            throw AppError.cast("В ответе сервера нет поля RESPONSE")
+            fail(AppError.humanText(error))
+            onPopToRoot?()
         }
     }
 
@@ -266,10 +194,7 @@ final class ShareViewModel: ObservableObject {
     }
 
     nonisolated static func errorText(_ error: Error) -> String {
-        if let localized = error as? LocalizedError, let text = localized.errorDescription {
-            return text
-        }
-        return error.localizedDescription
+        AppError.humanText(error)
     }
 
     func finish() {

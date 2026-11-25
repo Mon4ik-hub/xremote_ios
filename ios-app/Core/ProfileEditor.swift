@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Добавление или редактирование профиля: имя, IP/хост, порт + кнопка «Проверить» (PING).
+/// Живёт в Core: нужна и в расширении, и в приложении (экран «История»).
 struct ProfileEditor: View {
     @ObservedObject var store: TvProfileStore
     let existing: TvProfile?
@@ -110,7 +111,7 @@ enum TVCheck {
             }
             return "Ответ сервера: \(response.response ?? "без поля RESPONSE")"
         } catch {
-            return ShareViewModel.errorText(error)
+            return AppError.humanText(error)
         }
     }
 }

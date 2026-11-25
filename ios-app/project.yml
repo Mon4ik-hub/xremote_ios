@@ -31,6 +31,10 @@ targets:
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
         NSLocalNetworkUsageDescription: "Приложению нужен доступ к локальной сети, чтобы отправлять видео на AniLabX на телевизоре."
+        CFBundleURLTypes:
+          - CFBundleURLName: com.mon4ik.animegocast
+            CFBundleURLSchemes:
+              - animegocast
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mon4ik.animegocast

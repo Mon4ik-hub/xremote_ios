@@ -78,6 +78,20 @@ final class TvProfileStoreTests: XCTestCase {
         XCTAssertEqual(store.profiles.map { $0.id }, [top.id, bottom.id])
     }
 
+    func testUpsertFromHandoff() {
+        let defaults = makeDefaults()
+        let store = TvProfileStore(defaults: defaults)
+        // первый handoff: телевизор ещё не сохранён — добавляется и поднимается
+        store.upsert(name: "Гостиная", host: "192.168.1.50", port: 31338)
+        XCTAssertEqual(store.profiles.map { $0.name }, ["Гостиная", "Телевизор"])
+        XCTAssertEqual(store.lastUsed?.host, "192.168.1.50")
+
+        // повторный handoff с тем же адресом: обновляется, а не дублируется
+        store.upsert(name: "Гостиная 4K", host: "192.168.1.50", port: 31338)
+        XCTAssertEqual(store.profiles.count, 2)
+        XCTAssertEqual(store.profiles[0].name, "Гостиная 4K")
+    }
+
     func testUpdateKeepsPosition() {
         let store = TvProfileStore(defaults: makeDefaults())
         let top = store.profiles[0]

@@ -62,6 +62,20 @@ final class TvProfileStore: ObservableObject {
         persist()
     }
 
+    /// Добавить или обновить телевизор и поднять наверх (handoff из расширения).
+    func upsert(name: String, host: String, port: Int) {
+        if let existing = profiles.first(where: { $0.host == host && $0.port == port }) {
+            var updated = existing
+            updated.name = name
+            update(updated)
+            markUsed(id: updated.id)
+        } else {
+            let profile = TvProfile(name: name, host: host, port: port)
+            add(profile)
+            markUsed(id: profile.id)
+        }
+    }
+
     private func persist() {
         guard let data = try? JSONEncoder().encode(profiles) else { return }
         defaults.set(data, forKey: Self.storageKey)
