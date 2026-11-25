@@ -24,7 +24,7 @@ jobs:
         id: sim
         run: |
           name=$(xcrun simctl list devices available | grep 'iPhone' | head -1 \
-            | sed -E 's/\(([0-9A-Fa-f-]{36})\).*//; s/[[:space:]]+$//')
+            | sed -E 's/\(([0-9A-Fa-f-]{36})\).*//; s/^[[:space:]]+//; s/[[:space:]]+$//')
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "Симулятор: $name"
 
