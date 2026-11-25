@@ -22,7 +22,7 @@ enum HistoryPasteboard {
             [item],
             options: [
                 .localOnly: true,
-                .expirationDate: Date().addingTimeInterval(expiration),
+                .expirationDate: Date().addingTimeInterval(expiration)
             ]
         )
     }
