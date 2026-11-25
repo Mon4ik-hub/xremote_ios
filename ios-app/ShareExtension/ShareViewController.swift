@@ -3,14 +3,31 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Точка входа Share Extension: достаёт URL из «Поделиться» и отдаёт SwiftUI-экрану.
+/// Навигация — внешний UINavigationController, экраны — UIHostingController.
 final class ShareViewController: UIViewController {
     private let viewModel = ShareViewModel()
+    private weak var navController: UINavigationController?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         embedSwiftUI()
         viewModel.onFinish = { [weak self] in
             self?.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+        }
+        viewModel.onShowProfiles = { [weak self] in
+            self?.push(ProfilesView(store: self?.viewModel.store ?? TvProfileStore()))
+        }
+        viewModel.onShowTVPicker = { [weak self] episode in
+            self?.push(TVPickerView(
+                store: self?.viewModel.store ?? TvProfileStore(),
+                episode: episode,
+                onSelect: { [weak self] profile in
+                    Task { await self?.viewModel.cast(episode, to: profile) }
+                }
+            ))
+        }
+        viewModel.onPopToRoot = { [weak self] in
+            self?.navController?.popToRootViewController(animated: true)
         }
         Task { await loadIncomingURL() }
     }
@@ -25,9 +42,14 @@ final class ShareViewController: UIViewController {
             nav.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             nav.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             nav.view.topAnchor.constraint(equalTo: view.topAnchor),
-            nav.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            nav.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
         nav.didMove(toParent: self)
+        navController = nav
+    }
+
+    private func push(_ view: some View) {
+        navController?.pushViewController(UIHostingController(rootView: view), animated: true)
     }
 
     private func loadIncomingURL() async {

@@ -14,8 +14,8 @@ struct Regex {
     }
 
     func firstMatch(in text: String) -> NSTextCheckingResult? {
-        let ns = text as NSString
-        return regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: ns.length))
+        let nsHtml = text as NSString
+        return regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: nsHtml.length))
     }
 
     /// Группа 1 первого совпадения.
@@ -25,14 +25,14 @@ struct Regex {
     }
 
     func allMatches(in text: String) -> [NSTextCheckingResult] {
-        let ns = text as NSString
-        return regex.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
+        let nsHtml = text as NSString
+        return regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsHtml.length))
     }
 
     /// Замена всех совпадений на шаблон.
     func replace(in text: String, with template: String) -> String {
-        let ns = text as NSString
-        let range = NSRange(location: 0, length: ns.length)
+        let nsHtml = text as NSString
+        let range = NSRange(location: 0, length: nsHtml.length)
         return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: template)
     }
 

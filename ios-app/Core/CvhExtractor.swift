@@ -12,13 +12,13 @@ enum CvhExtractor {
     private static let headers = [
         "Referer": referer,
         "Accept": "application/json",
-        "User-Agent": HttpClient.browserUA,
+        "User-Agent": HttpClient.browserUA
     ]
 
     private static let qualityMap: [(String, Int)] = [
         ("mpegMobileUrl", 144), ("mpegTinyUrl", 144), ("mpegLowestUrl", 240), ("mpegLowUrl", 360),
         ("mpegMediumUrl", 480), ("mpegHighUrl", 720), ("mpegFullHdUrl", 1080), ("mpegQhdUrl", 1440),
-        ("mpeg2kUrl", 2048), ("mpeg4kUrl", 2160),
+        ("mpeg2kUrl", 2048), ("mpeg4kUrl", 2160)
     ]
 
     struct EpisodeItem: Equatable {

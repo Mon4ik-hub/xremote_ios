@@ -25,7 +25,7 @@ enum CastMessage {
     static func playVideo(_ request: PlayRequest) throws -> Data {
         let required = [
             request.contentId, request.title, request.season, request.translation,
-            request.episode, request.directUrl, request.embedUrl,
+            request.episode, request.directUrl, request.embedUrl
         ]
         guard required.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
             throw AppError.cast("Пустые обязательные поля PLAY_DATA — отправка отменена (без них сервер AniLabX падает)")
@@ -41,20 +41,20 @@ enum CastMessage {
             "LINK_ITEM": [
                 "NAME": request.qualityName,
                 "LINK_PARTS": [request.directUrl],
-                "IS_ALTERNATIVE": false,
+                "IS_ALTERNATIVE": false
             ],
             "PARSE_LINK": [
                 "ORIGINAL": request.embedUrl,
                 "DIRECT": request.directUrl,
-                "HEADERS_FOR_DIRECT": request.headersForDirect,
+                "HEADERS_FOR_DIRECT": request.headersForDirect
             ],
             "RESPECT_TRANSLATION_NAME": true,
             "POSITION": 0,
-            "WINDOW": 0,
+            "WINDOW": 0
         ]
         return try envelope("PLAY_VIDEO", extra: [
             "PLAY_COMMAND": "NONE",
-            "PLAY_DATA": playData,
+            "PLAY_DATA": playData
         ])
     }
 
@@ -77,7 +77,7 @@ enum CastMessage {
             "CLIENT_APP_NAME": clientAppName,
             "CLIENT_APP_VERSION": clientAppVersion,
             "CLIENT_TYPE": clientType,
-            "COMMAND": command,
+            "COMMAND": command
         ]
         for (key, value) in extra {
             message[key] = value

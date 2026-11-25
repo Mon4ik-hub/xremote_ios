@@ -7,7 +7,7 @@ final class StreamPickerTests: XCTestCase {
         VideoStream(kind: .hls, quality: 1080, url: "hls1080"),
         VideoStream(kind: .mp4, quality: 1080, url: "mp4-1080"),
         VideoStream(kind: .mp4, quality: 720, url: "mp4-720"),
-        VideoStream(kind: .mp4, quality: 480, url: "mp4-480"),
+        VideoStream(kind: .mp4, quality: 480, url: "mp4-480")
     ]
 
     func testBestPicksTopMp4() {

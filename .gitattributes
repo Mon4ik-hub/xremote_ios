@@ -1,0 +1,2 @@
+# Единый LF для текстовых файлов (Serena/редакторы на Windows пишут CRLF)
+* text=auto eol=lf

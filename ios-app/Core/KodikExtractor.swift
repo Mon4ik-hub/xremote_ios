@@ -19,7 +19,7 @@ enum KodikExtractor {
         let url = forceHttps(rawUrl)
         let page = try await http.getText(url, headers: [
             "Referer": referer,
-            "User-Agent": HttpClient.browserUA,
+            "User-Agent": HttpClient.browserUA
         ])
 
         let params = try parseUrlParams(page)
@@ -29,7 +29,7 @@ enum KodikExtractor {
         let origin = originOf(url)
         let script = try await http.getText(origin + scriptPath, headers: [
             "Referer": url,
-            "User-Agent": HttpClient.browserUA,
+            "User-Agent": HttpClient.browserUA
         ])
         let postPath = try endpoint(fromScript: script)
         guard postPath.hasPrefix("/") else {
@@ -49,7 +49,7 @@ enum KodikExtractor {
             "ref": rawRef.removingPercentEncoding ?? rawRef,
             "ref_sign": params["ref_sign"] ?? "",
             "bad_user": "true",
-            "cdn_is_working": "true",
+            "cdn_is_working": "true"
         ]
         let data = try await http.postForm(origin + postPath, form: form, headers: [
             "Content-Type": "application/x-www-form-urlencoded",
@@ -57,7 +57,7 @@ enum KodikExtractor {
             "Origin": origin,
             "X-Requested-With": "XMLHttpRequest",
             "Accept": "application/json, text/javascript, */*; q=0.01",
-            "User-Agent": HttpClient.browserUA,
+            "User-Agent": HttpClient.browserUA
         ])
         return try streams(fromResponse: data)
     }

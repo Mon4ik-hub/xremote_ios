@@ -1,0 +1,21 @@
+# Локальный запуск (Windows, тулчейна Swift нет):
+#   "C:\Program Files\SwiftLint\swiftlint.exe" lint ios-app --quiet --disable-sourcekit
+disabled_rules:
+  - optional_data_string_conversion # String(decoding:) — осознанный lossless UTF-8
+  - statement_position              # требует SourceKit, на Windows недоступен
+
+line_length:
+  warning: 140
+  error: 220
+
+identifier_name:
+  min_length: 2 # короткие допустимы: id, ns
+  max_length: 40
+
+# try! в Regex.init — только на литеральных регулярках (ошибка=баг разработчика)
+force_try:
+  severity: warning
+
+excluded:
+  - Tests/Fixtures.swift # длинные HTML-строки-заготовки
+  - build

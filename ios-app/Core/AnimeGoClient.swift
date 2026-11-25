@@ -16,14 +16,14 @@ struct AnimeGoClient {
             "X-Requested-With": "XMLHttpRequest",
             "Accept": "application/json",
             "User-Agent": HttpClient.browserUA,
-            "Referer": referer,
+            "Referer": referer
         ]
     }
 
     func fetchAnimeMeta(animeUrl: String) async throws -> AnimeMeta {
         let page = try await http.getText(animeUrl, headers: [
             "Accept-Language": "ru-RU,ru;q=0.9",
-            "User-Agent": HttpClient.browserUA,
+            "User-Agent": HttpClient.browserUA
         ])
         return try Html.animeMeta(from: page)
     }

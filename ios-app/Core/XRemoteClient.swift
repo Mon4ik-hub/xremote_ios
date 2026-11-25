@@ -81,33 +81,39 @@ final class XRemoteClient {
         }.value
     }
 
+    // MARK: - Блокирующие этапы одной команды
+
     /// Блокирующая реализация на отдельном потоке: за 5-секундным бюджетом проще
     /// гоняться семафором, чем стыковать продолжения Network.framework.
     private func sendBlocking(_ payload: String) throws -> XRemoteResponse {
         let deadline = Date().addingTimeInterval(timeout)
-        let semaphore = DispatchSemaphore(value: 0)
+        let connection = try connect(deadline: deadline)
+        defer { connection.cancel() }
+        try sendText(payload, on: connection, deadline: deadline)
+        return try readResponse(on: connection, deadline: deadline)
+    }
 
+    private func connect(deadline: Date) throws -> NWConnection {
         let endpoint = NWEndpoint.hostPort(
             host: NWEndpoint.Host(host),
             port: NWEndpoint.Port(rawValue: port)!
         )
         let connection = NWConnection(to: endpoint, using: .tcp)
-        defer { connection.cancel() }
-
-        let stateFailure = Locked<Error?>(nil)
+        let semaphore = DispatchSemaphore(value: 0)
+        let failure = Locked<Error?>(nil)
         connection.stateUpdateHandler = { (state: NWConnection.State) in
             switch state {
             case .ready:
                 semaphore.signal()
             case .failed(let error):
-                stateFailure.set(XRemoteError.connectionFailed(error.localizedDescription))
+                failure.set(XRemoteError.connectionFailed(error.localizedDescription))
                 semaphore.signal()
             case .waiting(let error):
                 // «нет маршрута» и подобное — считаем ошибкой сразу, не ждём восстановления
-                stateFailure.set(XRemoteError.connectionFailed(error.localizedDescription))
+                failure.set(XRemoteError.connectionFailed(error.localizedDescription))
                 semaphore.signal()
             case .cancelled:
-                stateFailure.set(XRemoteError.connectionClosed)
+                failure.set(XRemoteError.connectionClosed)
                 semaphore.signal()
             default:
                 break
@@ -116,63 +122,81 @@ final class XRemoteClient {
         connection.start(queue: DispatchQueue(label: "ru.mon4ik.animegocast.xremote"))
 
         guard waitUntil(semaphore, deadline: deadline) else { throw XRemoteError.timeout }
-        if let failure = stateFailure.get() {
-            // .cancelled записывает ошибку всегда, но отмена после .ready — не ошибка подключения
-            if case XRemoteError.connectionClosed = failure, connection.state == .ready {} else { throw failure }
+        if let failure = failure.get() {
+            if case XRemoteError.connectionClosed = failure, connection.state == .ready {
+                // отмена после готовности — нормальное завершение, не ошибка подключения
+            } else {
+                throw failure
+            }
         }
+        return connection
+    }
 
+    private func sendText(_ payload: String, on connection: NWConnection, deadline: Date) throws {
         var text = payload
         if !text.hasSuffix("\n") {
             text += "\n"
         }
-        let sendFailure = Locked<Error?>(nil)
+        let semaphore = DispatchSemaphore(value: 0)
+        let failure = Locked<Error?>(nil)
         connection.send(content: Data(text.utf8), completion: .contentProcessed { (error: NWError?) in
             if let error {
-                sendFailure.set(XRemoteError.connectionFailed(error.localizedDescription))
+                failure.set(XRemoteError.connectionFailed(error.localizedDescription))
             }
             semaphore.signal()
         })
         guard waitUntil(semaphore, deadline: deadline) else { throw XRemoteError.timeout }
-        if let failure = sendFailure.get() {
+        if let failure = failure.get() {
             throw failure
         }
+    }
 
-        // читаем одну строку ответа до "\n"
+    private func readResponse(on connection: NWConnection, deadline: Date) throws -> XRemoteResponse {
         var buffer = Data()
         while true {
-            if let newline = buffer.firstIndex(of: 0x0A) {
-                let lineData = buffer.subdata(in: buffer.startIndex..<newline)
-                let line = String(decoding: lineData, as: UTF8.self)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !line.isEmpty else {
-                    throw XRemoteError.badResponse("пустая строка")
-                }
-                guard let object = (try? JSONSerialization.jsonObject(with: lineData)) as? [String: Any] else {
-                    throw XRemoteError.badResponse(String(line.prefix(200)))
-                }
-                return XRemoteResponse(raw: line, json: object)
+            if let response = try takeResponse(from: &buffer) {
+                return response
             }
             guard Date() < deadline else { throw XRemoteError.timeout }
 
-            let receiveFailure = Locked<Error?>(nil)
+            let semaphore = DispatchSemaphore(value: 0)
+            let failure = Locked<Error?>(nil)
             let received = Locked<Data?>(nil)
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { (content: Data?, _: NWConnection.ContentContext?, isComplete: Bool, error: NWError?) in
+            connection.receive(
+                minimumIncompleteLength: 1,
+                maximumLength: 65536
+            ) { (content: Data?, _: NWConnection.ContentContext?, isComplete: Bool, error: NWError?) in
                 received.set(content)
                 if let error {
-                    receiveFailure.set(XRemoteError.connectionFailed(error.localizedDescription))
+                    failure.set(XRemoteError.connectionFailed(error.localizedDescription))
                 } else if isComplete, content?.isEmpty != false {
-                    receiveFailure.set(XRemoteError.connectionClosed)
+                    failure.set(XRemoteError.connectionClosed)
                 }
                 semaphore.signal()
             }
             guard waitUntil(semaphore, deadline: deadline) else { throw XRemoteError.timeout }
-            if let failure = receiveFailure.get() {
+            if let failure = failure.get() {
                 throw failure
             }
             if let content = received.get(), !content.isEmpty {
                 buffer.append(content)
             }
         }
+    }
+
+    /// Если в буфере есть строка до "\n" — разбирает её в ответ и срезает из буфера.
+    private func takeResponse(from buffer: inout Data) throws -> XRemoteResponse? {
+        guard let newline = buffer.firstIndex(of: 0x0A) else { return nil }
+        let lineData = buffer.subdata(in: buffer.startIndex..<newline)
+        let line = String(data: lineData, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !line.isEmpty else {
+            throw XRemoteError.badResponse("пустая строка")
+        }
+        guard let object = (try? JSONSerialization.jsonObject(with: lineData)) as? [String: Any] else {
+            throw XRemoteError.badResponse(String(line.prefix(200)))
+        }
+        return XRemoteResponse(raw: line, json: object)
     }
 
     private func waitUntil(_ semaphore: DispatchSemaphore, deadline: Date) -> Bool {

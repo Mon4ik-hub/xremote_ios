@@ -42,16 +42,16 @@ final class TvProfileStoreTests: XCTestCase {
 
     func testMarkUsedBubblesLastUsedToTop() {
         let store = TvProfileStore(defaults: makeDefaults())
-        let first = store.profiles[0]
-        let second = TvProfile(name: "Второй", host: "10.0.0.2", port: 31337)
-        store.add(second)
+        let top = store.profiles[0]
+        let pushed = TvProfile(name: "Второй", host: "10.0.0.2", port: 31337)
+        store.add(pushed)
 
-        store.markUsed(id: second.id) // отправка второму поднимает его наверх
-        XCTAssertEqual(store.profiles.map { $0.id }, [second.id, first.id])
-        XCTAssertEqual(store.lastUsed?.id, second.id)
+        store.markUsed(id: pushed.id) // отправка второму поднимает его наверх
+        XCTAssertEqual(store.profiles.map { $0.id }, [pushed.id, top.id])
+        XCTAssertEqual(store.lastUsed?.id, pushed.id)
 
-        store.markUsed(id: first.id) // и наоборот
-        XCTAssertEqual(store.profiles.map { $0.id }, [first.id, second.id])
+        store.markUsed(id: top.id) // и наоборот
+        XCTAssertEqual(store.profiles.map { $0.id }, [top.id, pushed.id])
     }
 
     func testRemoveLastUsedPromotesNext() {
@@ -68,26 +68,26 @@ final class TvProfileStoreTests: XCTestCase {
 
     func testRemoveKeepsOrderOfRest() {
         let store = TvProfileStore(defaults: makeDefaults())
-        let a = store.profiles[0]
-        let b = TvProfile(name: "B", host: "10.0.0.2", port: 31337)
-        let c = TvProfile(name: "C", host: "10.0.0.3", port: 31337)
-        store.add(b)
-        store.add(c)
+        let top = store.profiles[0]
+        let middle = TvProfile(name: "B", host: "10.0.0.2", port: 31337)
+        let bottom = TvProfile(name: "C", host: "10.0.0.3", port: 31337)
+        store.add(middle)
+        store.add(bottom)
 
-        store.remove(id: b.id)
-        XCTAssertEqual(store.profiles.map { $0.id }, [a.id, c.id])
+        store.remove(id: middle.id)
+        XCTAssertEqual(store.profiles.map { $0.id }, [top.id, bottom.id])
     }
 
     func testUpdateKeepsPosition() {
         let store = TvProfileStore(defaults: makeDefaults())
-        let a = store.profiles[0]
-        var b = TvProfile(name: "B", host: "10.0.0.2", port: 31337)
-        store.add(b)
+        let top = store.profiles[0]
+        var renamed = TvProfile(name: "B", host: "10.0.0.2", port: 31337)
+        store.add(renamed)
 
-        b.name = "Переименованный"
-        b.port = 32000
-        store.update(b)
-        XCTAssertEqual(store.profiles.map { $0.id }, [a.id, b.id])
+        renamed.name = "Переименованный"
+        renamed.port = 32000
+        store.update(renamed)
+        XCTAssertEqual(store.profiles.map { $0.id }, [top.id, renamed.id])
         XCTAssertEqual(store.profiles[1].name, "Переименованный")
         XCTAssertEqual(store.profiles[1].port, 32000)
     }

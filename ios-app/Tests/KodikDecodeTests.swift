@@ -10,10 +10,10 @@ final class KodikDecodeTests: XCTestCase {
         XCTAssertEqual(KodikExtractor.caesarShift("ёж. 123", 3), "ёж. 123")
     }
 
+    /// Как у Kodik: value = цезарь(base64(ссылка), 26 - shift), без паддинга.
     private func encode(_ link: String, shift: Int) -> String {
-        let shifted = KodikExtractor.caesarShift(link, shift)
-        let data = Data(shifted.utf8)
-        return data.base64EncodedString().replacingOccurrences(of: "=", with: "")
+        let base64 = Data(link.utf8).base64EncodedString()
+        return KodikExtractor.caesarShift(base64, 26 - shift).replacingOccurrences(of: "=", with: "")
     }
 
     func testDecodeKodikUrlBruteForcesShift() throws {

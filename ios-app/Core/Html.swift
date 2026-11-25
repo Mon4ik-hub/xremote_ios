@@ -7,7 +7,8 @@ enum Html {
     static let h1 = Regex(#"<h1[^>]*>(.*?)</h1>"#, dotMatchesLineSeparators: true)
     static let htmlTag = Regex(#"<[^>]+>"#)
     static let episodeRow = Regex(
-        #"data-episode-number="([^"]+)"[^>]*data-episode-page="\d+"[^>]*data-episode-index="\d+"[^>]*data-episode-type="\d+"[^>]*data-episode="(\d+)""#
+        #"data-episode-number="([^"]+)"[^>]*data-episode-page="\d+""#
+            + #"[^>]*data-episode-index="\d+"[^>]*data-episode-type="\d+"[^>]*data-episode="(\d+)""#
     )
     static let providerRow = Regex(
         #"data-player="([^"]+)"[^>]*data-provider-title="([^"]+)"[^>]*data-translation-title="([^"]+)""#
@@ -47,21 +48,22 @@ enum Html {
     /// JSON из html-атрибута: убирает &quot;, &amp;, &#x5B; и прочие сущности.
     static func unescapeHtml(_ value: String) -> String {
         let named = ["quot": "\"", "amp": "&", "lt": "<", "gt": ">", "apos": "'", "nbsp": " "]
-        let entityRegex = Regex("&#x?[0-9a-fA-F]+|[a-zA-Z]+;")
-        let ns = value as NSString
+        let entityRegex = Regex("&(#x?[0-9a-fA-F]+|[a-zA-Z]+);")
+
+        let nsHtml = value as NSString
         var out = ""
         var cursor = 0
-        while cursor < ns.length {
-            let range = NSRange(location: cursor, length: ns.length - cursor)
+        while cursor < nsHtml.length {
+            let range = NSRange(location: cursor, length: nsHtml.length - cursor)
             guard let match = entityRegex.regex.firstMatch(in: value, options: [], range: range) else { break }
-            out += ns.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
-            let entity = ns.substring(with: match.range(at: 1))
-            let original = ns.substring(with: match.range)
+            out += nsHtml.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
+            let entity = nsHtml.substring(with: match.range(at: 1))
+            let original = nsHtml.substring(with: match.range)
             out += decodeEntity(entity, original: original, named: named)
             cursor = match.range.location + match.range.length
         }
-        if cursor < ns.length {
-            out += ns.substring(from: cursor)
+        if cursor < nsHtml.length {
+            out += nsHtml.substring(from: cursor)
         }
         return out
     }
