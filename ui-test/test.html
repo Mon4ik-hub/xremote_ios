@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>UI-тест панели</title>
+  <style>body { background: #fff; height: 1000px; }</style>
+  <link rel="stylesheet" href="/chrome-extension/content.css">
+</head>
+<body>
+  <script>
+    // ---- стабы chrome.* для проверки UI вне расширения ----
+    // слушатели сообщений, зарегистрированные content-скриптом
+    const pageListeners = [];
+    const notify = (msg) => pageListeners.forEach((fn) => fn(msg));
+
+    window.chrome = {
+      storage: { sync: { get: async (d) => d } },
+      runtime: {
+        sendMessage: async (msg) => {
+          if (msg.type === "agdl-get-info")
+            return {
+              ok: true,
+              data: {
+                title: "Тайная битва за престол сил",
+                episodes: Array.from({ length: 12 }, (_, i) => ({ number: String(i + 1), id: String(44878 + i) })),
+                dubs: {
+                  cvh: ["Dream Cast", "AniLiberty", "SHIZA Project", "AnimeVost"],
+                  kodik: ["Dream Cast", "AniLiberty", "AniDUB", "AniStar", "Субтитры"],
+                },
+              },
+            };
+          if (msg.type === "agdl-download") {
+            // имитируем фоновый воркер: started (тихо) -> finished (итог)
+            setTimeout(() => notify({ type: "agdl-progress", status: "started",
+              text: `эпизод 1: 480p — загрузка передана браузеру` }), 600);
+            setTimeout(() => notify({ type: "agdl-progress", status: "finished",
+              passed: 1, total: 1 }), 1300);
+            return { ok: true };
+          }
+          return { ok: true };
+        },
+        onMessage: { addListener: (fn) => pageListeners.push(fn) },
+      },
+    };
+    // ручная отправка прогресса из консоли для сценариев отмены:
+    // __sendProgress({ type: "agdl-progress", status: "error", text: "..." })
+    window.__sendProgress = notify;
+  </script>
+  <script src="/chrome-extension/content.js"></script>
+  <script>
+    // открываем панель сразу и имитируем выбор серии 3
+    setTimeout(async () => {
+      document.getElementById("agdl-fab").click();
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      await wait(500);
+      document.querySelectorAll("#agdl-eps-list .agdl-chip")[2].click(); // эпизод 3
+    }, 300);
+  </script>
+</body>
+</html>

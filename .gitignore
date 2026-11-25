@@ -1,0 +1,13 @@
+# закрытый прошлый вариант и личные файлы — не публиковать
+ios-userscript/
+downloads/
+.serena/
+
+# сборки и временные файлы
+ios-app/build/
+*.ipa
+Payload/
+*.xcarchive
+.DS_Store
+node_modules/
+__pycache__/

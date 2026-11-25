@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>AnimeGO Downloader — настройки</title>
+  <style>
+    body {
+      font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #1e1f24; color: #e8e8ec;
+      display: flex; justify-content: center; padding: 40px 16px;
+    }
+    .card {
+      width: 460px; background: #26272e; border: 1px solid #34353d;
+      border-radius: 12px; padding: 24px;
+    }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .sub { color: #9a9ba5; font-size: 12.5px; margin-bottom: 20px; }
+    label.field { display: block; margin-bottom: 16px; font-size: 13px; }
+    label.field .name { display: block; margin-bottom: 6px; color: #c6c7d0; }
+    label.field .hint { display: block; margin-top: 4px; color: #9a9ba5; font-size: 11.5px; }
+    select, input[type=text] {
+      width: 100%; box-sizing: border-box;
+      background: #1e1f24; color: #e8e8ec; border: 1px solid #3d3e48;
+      border-radius: 7px; padding: 8px 10px; font-size: 13px; outline: none;
+    }
+    select:focus, input:focus { border-color: #7c4dff; }
+    button {
+      border: none; border-radius: 8px; padding: 9px 22px;
+      background: linear-gradient(135deg, #7c4dff, #5b2edd);
+      color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    button:hover { filter: brightness(1.1); }
+    .saved { color: #69f0ae; font-size: 12.5px; margin-left: 12px; opacity: 0; transition: opacity .3s; }
+    .saved.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>AnimeGO Downloader</h1>
+    <div class="sub">Значения по умолчанию; на странице аниме их можно менять для конкретной загрузки.</div>
+
+    <label class="field">
+      <span class="name">Плеер по умолчанию</span>
+      <select id="player">
+        <option value="cvh">CVH — прямое mp4, 144p–1080p (рекомендуется)</option>
+        <option value="kodik">Kodik — прямое mp4, 360p–720p</option>
+      </select>
+      <span class="hint">Озвучки на разных плеерах различаются — если нужной озвучки нет, переключите плеер.</span>
+    </label>
+
+    <label class="field">
+      <span class="name">Качество не выше</span>
+      <select id="quality">
+        <option value="best">максимальное доступное</option>
+        <option value="1080">1080p</option>
+        <option value="720">720p</option>
+        <option value="480">480p</option>
+        <option value="360">360p</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span class="name">Подпапка в «Загрузках»</span>
+      <input type="text" id="folder" placeholder="animego" maxlength="60">
+      <span class="hint">Пусто — сохранять прямо в «Загрузки».</span>
+    </label>
+
+    <button id="save">Сохранить</button>
+    <span class="saved" id="saved">Сохранено ✓</span>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

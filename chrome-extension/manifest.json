@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "AnimeGO Downloader",
+  "version": "1.0.0",
+  "description": "Загрузка аниме с animego.me через плееры CVH и Kodik. Без серверной части.",
+  "permissions": ["downloads", "storage", "declarativeNetRequestWithHostAccess"],
+  "host_permissions": [
+    "https://animego.me/*",
+    "https://plapi.cdnvideohub.com/*",
+    "https://kodikplayer.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://animego.me/anime/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "AnimeGO Downloader — настройки"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

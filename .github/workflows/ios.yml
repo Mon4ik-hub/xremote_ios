@@ -1,0 +1,60 @@
+name: ios
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установка XcodeGen
+        run: brew install xcodegen
+
+      - name: Генерация проекта
+        run: xcodegen generate
+
+      - name: Выбор симулятора
+        id: sim
+        run: |
+          name=$(xcrun simctl list devices available | grep 'iPhone' | head -1 \
+            | sed -E 's/\(([0-9A-Fa-f-]{36})\).*//; s/[[:space:]]+$//')
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "Симулятор: $name"
+
+      - name: Тесты
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -scheme AnimeGOCast \
+            -destination "platform=iOS Simulator,name=${{ steps.sim.outputs.name }}" \
+            2>&1 | tee test-output.txt
+
+      - name: Сборка неподписанного архива
+        run: |
+          xcodebuild archive \
+            -scheme AnimeGOCast \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/AnimeGOCast.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Упаковка IPA
+        run: |
+          mkdir -p build/Payload
+          cp -R build/AnimeGOCast.xcarchive/Products/Applications/AnimeGOCast.app build/Payload/
+          (cd build && zip -qry AnimeGOCast-unsigned.ipa Payload)
+
+      - name: Артефакты
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnimeGOCast-unsigned
+          path: |
+            ios-app/build/AnimeGOCast-unsigned.ipa
+            ios-app/test-output.txt
+          if-no-files-found: error
