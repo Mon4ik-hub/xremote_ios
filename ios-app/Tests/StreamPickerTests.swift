@@ -3,11 +3,11 @@ import XCTest
 
 final class StreamPickerTests: XCTestCase {
     /// Потоки в том порядке, как их отдаёт экстрактор: по убыванию качества, mp4 раньше hls.
-    private let streams: [Stream] = [
-        Stream(kind: .hls, quality: 1080, url: "hls1080"),
-        Stream(kind: .mp4, quality: 1080, url: "mp4-1080"),
-        Stream(kind: .mp4, quality: 720, url: "mp4-720"),
-        Stream(kind: .mp4, quality: 480, url: "mp4-480"),
+    private let streams: [VideoStream] = [
+        VideoStream(kind: .hls, quality: 1080, url: "hls1080"),
+        VideoStream(kind: .mp4, quality: 1080, url: "mp4-1080"),
+        VideoStream(kind: .mp4, quality: 720, url: "mp4-720"),
+        VideoStream(kind: .mp4, quality: 480, url: "mp4-480"),
     ]
 
     func testBestPicksTopMp4() {
@@ -26,12 +26,12 @@ final class StreamPickerTests: XCTestCase {
     }
 
     func testFallbackToLastWhenAllAboveCap() {
-        let only = [Stream(kind: .mp4, quality: 1080, url: "mp4-1080")]
+        let only = [VideoStream(kind: .mp4, quality: 1080, url: "mp4-1080")]
         XCTAssertEqual(pickMp4(only, maxQuality: "720")?.url, "mp4-1080")
     }
 
     func testNoMp4MeansNil() {
-        let hlsOnly = [Stream(kind: .hls, quality: 720, url: "hls720")]
+        let hlsOnly = [VideoStream(kind: .hls, quality: 720, url: "hls720")]
         XCTAssertNil(pickMp4(hlsOnly, maxQuality: "720"))
         XCTAssertNil(pickMp4([], maxQuality: nil))
     }

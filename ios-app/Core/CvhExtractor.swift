@@ -124,18 +124,18 @@ enum CvhExtractor {
         return pool[0]
     }
 
-    static func video(_ http: HttpClient, videoId: String) async throws -> [Stream] {
+    static func video(_ http: HttpClient, videoId: String) async throws -> [VideoStream] {
         let data = try await http.getJson("\(api)/video/\(videoId)", headers: headers)
         let sources = data["sources"] as? [String: Any] ?? [:]
-        var streams: [Stream] = []
+        var streams: [VideoStream] = []
         if let hls = stringValue(sources["hlsUrl"]) {
-            streams.append(Stream(kind: .hls, quality: nil, url: hls))
+            streams.append(VideoStream(kind: .hls, quality: nil, url: hls))
         }
         for (key, value) in sources.sorted(by: { $0.key < $1.key }) {
             guard let urlString = value as? String, urlString.hasPrefix("http") else { continue }
             if key == "hlsUrl" || key == "dashUrl" || key == "dashManifestUrl" { continue }
             guard let quality = qualityMap.first(where: { $0.0 == key })?.1 else { continue }
-            streams.append(Stream(kind: .mp4, quality: quality, url: urlString))
+            streams.append(VideoStream(kind: .mp4, quality: quality, url: urlString))
         }
         guard !streams.isEmpty else {
             throw AppError.parse("CVH не отдал ссылок для видео \(videoId)")
@@ -151,7 +151,7 @@ enum CvhExtractor {
     }
 
     /// Полный поток CVH: embed-ссылка (несёт cvh_id, озвучку и номер серии) -> потоки.
-    static func extract(_ http: HttpClient, embedUrl: String) async throws -> (item: EpisodeItem, streams: [Stream]) {
+    static func extract(_ http: HttpClient, embedUrl: String) async throws -> (item: EpisodeItem, streams: [VideoStream]) {
         let parsed = try parseUrl(embedUrl)
         let items = try await playlist(http, cvhId: parsed.cvhId)
         let chosen = try select(items, season: parsed.season, episode: parsed.episode, studio: parsed.studio)

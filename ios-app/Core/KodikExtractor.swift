@@ -15,7 +15,7 @@ enum KodikExtractor {
 
     private static let manifestSuffix = ":hls:manifest.m3u8"
 
-    static func extract(_ http: HttpClient, embedUrl rawUrl: String) async throws -> [Stream] {
+    static func extract(_ http: HttpClient, embedUrl rawUrl: String) async throws -> [VideoStream] {
         let url = forceHttps(rawUrl)
         let page = try await http.getText(url, headers: [
             "Referer": referer,
@@ -119,14 +119,14 @@ enum KodikExtractor {
 
     // MARK: - Ссылки из ответа
 
-    private static func streams(fromResponse data: [String: Any]) throws -> [Stream] {
+    private static func streams(fromResponse data: [String: Any]) throws -> [VideoStream] {
         if let error = data["error"] as? String {
             throw AppError.parse("Kodik вернул ошибку: \(error)")
         }
         let links = data["links"] as? [String: Any] ?? [:]
         guard !links.isEmpty else { throw AppError.parse("Kodik не вернул ссылок") }
 
-        var result: [Stream] = []
+        var result: [VideoStream] = []
         var knownShift: Int?
         // ключи качества по возрастанию (как в JS: (a|0)-(b|0))
         for qualityKey in links.keys.sorted(by: { numeric($0) < numeric($1) }) {
@@ -142,9 +142,9 @@ enum KodikExtractor {
                 link = forceHttps(decoded.link)
             }
             let quality = numeric(qualityKey)
-            result.append(Stream(kind: .hls, quality: quality, url: link))
+            result.append(VideoStream(kind: .hls, quality: quality, url: link))
             if link.hasSuffix(manifestSuffix) {
-                result.append(Stream(kind: .mp4, quality: quality, url: String(link.dropLast(manifestSuffix.count))))
+                result.append(VideoStream(kind: .mp4, quality: quality, url: String(link.dropLast(manifestSuffix.count))))
             }
         }
         guard !result.isEmpty else { throw AppError.parse("Kodik вернул пустой список ссылок") }

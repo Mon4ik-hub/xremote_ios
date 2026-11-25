@@ -23,7 +23,7 @@ enum StreamKind: String, Equatable {
     case hls
 }
 
-struct Stream: Equatable {
+struct VideoStream: Equatable {
     let kind: StreamKind
     let quality: Int?    // 1080, 720, ...; nil у HLS без качества
     let url: String
