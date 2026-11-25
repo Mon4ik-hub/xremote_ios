@@ -39,10 +39,34 @@ struct ShareView: View {
             }
             Section("Серии") {
                 ForEach(viewModel.episodes) { episode in
-                    Button("Эпизод \(episode.number)") {
+                    Button {
                         viewModel.cast(episode)
+                    } label: {
+                        HStack {
+                            if viewModel.watched.contains(episode.id) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            }
+                            Text("Эпизод \(episode.number)")
+                                .foregroundStyle(
+                                    viewModel.watched.contains(episode.id)
+                                        ? AnyShapeStyle(.secondary)
+                                        : AnyShapeStyle(.primary)
+                                )
+                        }
                     }
                     .disabled(viewModel.casting)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button {
+                            viewModel.toggleWatched(episode)
+                        } label: {
+                            Label(
+                                viewModel.watched.contains(episode.id) ? "Не смотрел" : "Просмотрено",
+                                systemImage: viewModel.watched.contains(episode.id) ? "circle" : "checkmark"
+                            )
+                        }
+                        .tint(viewModel.watched.contains(episode.id) ? .gray : .green)
+                    }
                 }
             }
             Section {

@@ -68,7 +68,11 @@ enum CvhExtractor {
         let data = try await http.getJson(url, headers: headers)
         let items = data["items"] as? [[String: Any]] ?? []
         guard !items.isEmpty else {
-            throw AppError.parse("CVH вернул пустой плейлист для id=\(cvhId)")
+            // так проявляется региональная блокировка тайтла (плашка
+            // «Контент запрещен на территории РФ» поверх плеера)
+            throw AppError.parse(
+                "CVH: плейлист пуст (id=\(cvhId)) — вероятно, контент заблокирован в вашем регионе. Выберите плеер Kodik в настройках"
+            )
         }
         return items.map { item in
             let season = intValue(item["season"])

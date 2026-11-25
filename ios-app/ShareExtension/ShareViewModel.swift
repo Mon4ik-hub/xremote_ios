@@ -17,9 +17,12 @@ final class ShareViewModel: ObservableObject {
     @Published private(set) var playerKey: String
     /// Выбранная озвучка (зависит от плеера); пустая строка — «первая доступная».
     @Published private(set) var selectedDub: String
+    /// Просмотренные серии (id из data-episode).
+    @Published private(set) var watched: Set<String>
     private(set) var inputURL: URL?
 
     private let prefs = CastPreferences()
+    private let watchedStore = WatchedStore()
 
     var onFinish: (() -> Void)?
     var onShowProfiles: (() -> Void)?
@@ -33,6 +36,13 @@ final class ShareViewModel: ObservableObject {
         self.store = store
         playerKey = prefs.playerKey
         selectedDub = prefs.dub
+        watched = watchedStore.all()
+    }
+
+    /// Ручная пометка «Просмотрено» (свайп по строке серии).
+    func toggleWatched(_ episode: Episode) {
+        watchedStore.toggle(episode.id)
+        watched = watchedStore.all()
     }
 
     // MARK: - Выбор плеера и озвучки
@@ -135,6 +145,8 @@ final class ShareViewModel: ObservableObject {
             try requireSuccess(response)
             statusText = "Запущено на «\(profile.name)»: эпизод \(episode.number), \(resolved.qualityName)"
             store.markUsed(id: profile.id)
+            watchedStore.markWatched(episode.id) // отправленная серия = просмотренная
+            watched = watchedStore.all()
         } catch {
             fail(Self.errorText(error))
         }
