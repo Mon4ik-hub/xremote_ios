@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Контейнерное приложение: инструкция + история просмотров.
 /// История заполняется автоматически: после успешной отправки Share Extension
@@ -7,6 +8,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var history = HistoryStore()
     @StateObject private var profiles = TvProfileStore()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
@@ -56,13 +58,33 @@ struct ContentView: View {
             }
             .navigationTitle("AnimeGO Cast")
             .onOpenURL { url in
-                handleHandoff(url)
+                if let payload = HistoryHandoff.parse(url) {
+                    applyHandoff(payload)
+                }
+            }
+            .onAppear { importPasteboardHistory() }
+            .onChange(of: scenePhase) { phase in
+                if phase == .active {
+                    importPasteboardHistory()
+                }
             }
         }
     }
 
-    private func handleHandoff(_ url: URL) {
-        guard let payload = HistoryHandoff.parse(url) else { return }
+    /// История из расширения приходит по буферу обмена (см. HistoryPasteboard):
+    /// читаем только если changeCount изменился — чужое содержимое не трогаем.
+    private func importPasteboardHistory() {
+        let defaults = UserDefaults.standard
+        let countKey = "history_paste_count"
+        let count = UIPasteboard.general.changeCount
+        guard count != defaults.integer(forKey: countKey) else { return }
+        defaults.set(count, forKey: countKey)
+        guard let payload = HistoryPasteboard.readPayload() else { return }
+        HistoryPasteboard.clear()
+        applyHandoff(payload)
+    }
+
+    private func applyHandoff(_ payload: HistoryHandoff.Payload) {
         history.upsert(url: payload.url, title: payload.title, episodeNumber: payload.episodeNumber)
         if let name = payload.tvName, let host = payload.tvHost, let port = payload.tvPort {
             profiles.upsert(name: name, host: host, port: port)

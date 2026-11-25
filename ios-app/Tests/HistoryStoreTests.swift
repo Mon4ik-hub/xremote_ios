@@ -99,4 +99,34 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertNil(HistoryHandoff.parse(URL(string: "https://animego.me/anime/x")!))
         XCTAssertNil(HistoryHandoff.parse(URL(string: "animex://resume?url=1")!))
     }
+
+    func testPasteboardRoundTrip() throws {
+        let payload = HistoryHandoff.Payload(
+            url: "https://animego.me/anime/x-1",
+            title: "Тайтл",
+            episodeNumber: "5",
+            episodeId: "100500",
+            tvName: "Телевизор",
+            tvHost: "192.168.1.140",
+            tvPort: 31337,
+            playerKey: "kodik",
+            dub: "Дубляж"
+        )
+        HistoryPasteboard.write(payload)
+        let read = try XCTUnwrap(HistoryPasteboard.readPayload())
+        XCTAssertEqual(read.url, payload.url)
+        XCTAssertEqual(read.title, payload.title)
+        XCTAssertEqual(read.episodeNumber, "5")
+        XCTAssertEqual(read.tvPort, 31337)
+        XCTAssertEqual(read.playerKey, "kodik")
+
+        HistoryPasteboard.clear()
+        XCTAssertNil(HistoryPasteboard.readPayload()) // потребили — больше не импортируем
+    }
+
+    func testPasteboardIgnoresForeignContent() {
+        UIPasteboard.general.string = "какой-то скопированный текст"
+        XCTAssertNil(HistoryPasteboard.readPayload())
+        UIPasteboard.general.string = ""
+    }
 }

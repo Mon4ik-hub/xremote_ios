@@ -63,7 +63,7 @@ enum HistoryHandoff {
     static let scheme = "animegocast"
     static let host = "resume"
 
-    struct Payload {
+    struct Payload: Codable {
         let url: String
         let title: String
         let episodeNumber: String

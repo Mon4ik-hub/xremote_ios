@@ -168,8 +168,9 @@ final class ShareViewModel: ObservableObject {
             watchedStore.markWatched(episode.id) // отправленная серия = просмотренная
             watched = watchedStore.all()
 
-            // панель остаётся открытой: ссылка для кнопки «Записать в историю приложения»
-            handoffURL = HistoryHandoff.makeURL(.init(
+            // Автозапись истории через буфер обмена: приложение импортирует её
+            // при следующем открытии (без App Groups это единственный канал).
+            let payload = HistoryHandoff.Payload(
                 url: urlString,
                 title: meta.title,
                 episodeNumber: episode.number,
@@ -179,7 +180,10 @@ final class ShareViewModel: ObservableObject {
                 tvPort: profile.port,
                 playerKey: playerKey,
                 dub: selectedDub
-            ))
+            )
+            HistoryPasteboard.write(payload)
+            // панель остаётся открытой: ссылка для кнопки «Записать в историю приложения»
+            handoffURL = HistoryHandoff.makeURL(payload)
         } catch {
             fail(AppError.humanText(error))
             onPopToRoot?()
