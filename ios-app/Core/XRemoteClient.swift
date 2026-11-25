@@ -31,15 +31,24 @@ enum XRemoteError: LocalizedError {
     }
 }
 
-/// Потокобезопасная ячейка для ошибки из колбэков Network.framework.
-private final class LockedError {
+/// Потокобезопасная ячейка для значений из колбэков Network.framework.
+private final class Locked<T> {
     private let lock = NSLock()
-    private var value: Error?
-    func set(_ newValue: Error) {
-        lock.lock(); value = newValue; lock.unlock()
+    private var value: T
+
+    init(_ initial: T) {
+        value = initial
     }
-    func get() -> Error? {
-        lock.lock(); defer { lock.unlock() }
+
+    func set(_ newValue: T) {
+        lock.lock()
+        value = newValue
+        lock.unlock()
+    }
+
+    func get() -> T {
+        lock.lock()
+        defer { lock.unlock() }
         return value
     }
 }
@@ -47,8 +56,8 @@ private final class LockedError {
 /// Клиент XRemote — «голый» TCP по правилам AniLabX:
 /// одна команда = одно соединение, туда строка JSON + "\n", обратно одна строка
 /// JSON, соединение закрывает клиент. Таймаут 5 секунд обязателен: на неизвестную
-/// команду сервер вообще не отвечает. Последовательность вызовов send обеспечивает
-/// очередь запросов (каждый send — новое соединение после завершения предыдущего).
+/// команду сервер вообще не отвечает. Запросы идут строго по очереди — каждый
+/// send открывает новое соединение только после завершения предыдущего.
 final class XRemoteClient {
     let host: String
     let port: UInt16
@@ -78,14 +87,15 @@ final class XRemoteClient {
         let deadline = Date().addingTimeInterval(timeout)
         let semaphore = DispatchSemaphore(value: 0)
 
-        let connection = NWConnection(
-            to: NWEndpoint.hostPort(name: host, port: NWEndpoint.Port(rawValue: port)!),
-            using: .tcp
+        let endpoint = NWEndpoint.hostPort(
+            host: NWEndpoint.Host(host),
+            port: NWEndpoint.Port(rawValue: port)!
         )
+        let connection = NWConnection(to: endpoint, using: .tcp)
         defer { connection.cancel() }
 
-        let stateFailure = LockedError()
-        connection.stateUpdateHandler = { state in
+        let stateFailure = Locked<Error?>(nil)
+        connection.stateUpdateHandler = { (state: NWConnection.State) in
             switch state {
             case .ready:
                 semaphore.signal()
@@ -107,21 +117,25 @@ final class XRemoteClient {
 
         guard waitUntil(semaphore, deadline: deadline) else { throw XRemoteError.timeout }
         if let failure = stateFailure.get() {
-            // соединение уже готово (.ready) — эта ошибка не актуальна
+            // .cancelled записывает ошибку всегда, но отмена после .ready — не ошибка подключения
             if case XRemoteError.connectionClosed = failure, connection.state == .ready {} else { throw failure }
         }
 
         var text = payload
-        if !text.hasSuffix("\n") { text += "\n" }
-        let sendFailure = LockedError()
-        connection.send(content: Data(text.utf8), completion: .contentProcessed { error in
+        if !text.hasSuffix("\n") {
+            text += "\n"
+        }
+        let sendFailure = Locked<Error?>(nil)
+        connection.send(content: Data(text.utf8), completion: .contentProcessed { (error: NWError?) in
             if let error {
                 sendFailure.set(XRemoteError.connectionFailed(error.localizedDescription))
             }
             semaphore.signal()
         })
         guard waitUntil(semaphore, deadline: deadline) else { throw XRemoteError.timeout }
-        if let failure = sendFailure.get() { throw failure }
+        if let failure = sendFailure.get() {
+            throw failure
+        }
 
         // читаем одну строку ответа до "\n"
         var buffer = Data()
@@ -140,8 +154,10 @@ final class XRemoteClient {
             }
             guard Date() < deadline else { throw XRemoteError.timeout }
 
-            let receiveFailure = LockedError()
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { content, _, isComplete, error in
+            let receiveFailure = Locked<Error?>(nil)
+            let received = Locked<Data?>(nil)
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { (content: Data?, _: NWConnection.ContentContext?, isComplete: Bool, error: NWError?) in
+                received.set(content)
                 if let error {
                     receiveFailure.set(XRemoteError.connectionFailed(error.localizedDescription))
                 } else if isComplete, content?.isEmpty != false {
@@ -150,8 +166,10 @@ final class XRemoteClient {
                 semaphore.signal()
             }
             guard waitUntil(semaphore, deadline: deadline) else { throw XRemoteError.timeout }
-            if let failure = receiveFailure.get() { throw failure }
-            if let content, !content.isEmpty {
+            if let failure = receiveFailure.get() {
+                throw failure
+            }
+            if let content = received.get(), !content.isEmpty {
                 buffer.append(content)
             }
         }
