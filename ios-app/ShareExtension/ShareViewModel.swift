@@ -103,10 +103,34 @@ final class ShareViewModel: ObservableObject {
             throw AppError.cast("Страница ещё не загружена")
         }
         let providers = try await animego.fetchProviders(animeUrl: urlString, episodeId: episode.id)
-        let provider = providers.first { $0.key == "cvh" } ?? providers.first { $0.key == "kodik" }
-        guard let provider else {
+        let candidates = castCandidates(providers)
+        guard !candidates.isEmpty else {
             throw AppError.cast("У этого эпизода нет поддерживаемых плееров (нужны CVH или Kodik)")
         }
+
+        // Ссылку получаем в последний момент и сразу возвращаем — CVH-ссылки
+        // короткоживущие и не перезапрашиваются. Если CVH не сработал (например,
+        // пустой плейлист) — пробуем Kodik и остальные озвучки.
+        var lastError: Error?
+        let attempts = Array(candidates.prefix(4))
+        for (index, provider) in attempts.enumerated() {
+            if index > 0 {
+                statusText = attempts[index - 1].key == "cvh"
+                    ? "CVH не сработал, пробую Kodik…"
+                    : "Пробую другой плеер…"
+            }
+            do {
+                return try await extractAndBuild(provider: provider, episode: episode, title: meta.title)
+            } catch {
+                lastError = error
+            }
+        }
+        let reason = Self.errorText(lastError ?? AppError.parse("неизвестно"))
+        throw AppError.cast("Ни один плеер не дал ссылку. Последняя ошибка: \(reason)")
+    }
+
+    /// Извлечение прямой ссылки одного плеера и сборка сообщения.
+    private func extractAndBuild(provider: ProviderItem, episode: Episode, title: String) async throws -> (message: Data, qualityName: String) {
         let streams: [VideoStream]
         let season: String
         if provider.key == "cvh" {
@@ -127,7 +151,7 @@ final class ShareViewModel: ObservableObject {
         let qualityName = "\(stream.quality ?? 0)p"
         let message = try CastMessage.playVideo(.init(
             contentId: "animego/" + episode.id,
-            title: meta.title,
+            title: title,
             season: season,
             translation: provider.dub,
             episode: "\(episode.number) серия",

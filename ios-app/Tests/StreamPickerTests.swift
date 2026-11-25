@@ -35,4 +35,24 @@ final class StreamPickerTests: XCTestCase {
         XCTAssertNil(pickMp4(hlsOnly, maxQuality: "720"))
         XCTAssertNil(pickMp4([], maxQuality: nil))
     }
+
+    // MARK: Порядок попыток при отправке
+
+    private func provider(_ key: String, _ dub: String) -> ProviderItem {
+        ProviderItem(key: key, url: "embed-" + key + "-" + dub, dub: dub)
+    }
+
+    func testCastCandidatesPutFirstOfEachKeyFirst() {
+        let candidates = castCandidates([
+            provider("cvh", "A"), provider("cvh", "B"), provider("kodik", "C"), provider("kodik", "D")
+        ])
+        XCTAssertEqual(candidates.map { $0.dub }, ["A", "C", "B", "D"])
+    }
+
+    func testCastCandidatesWhenCvhMissingOrEmpty() {
+        // только Kodik — как у тайтлов с пустым плейлистом CVH
+        XCTAssertEqual(castCandidates([provider("kodik", "C"), provider("kodik", "D")]).map { $0.dub }, ["C", "D"])
+        XCTAssertEqual(castCandidates([provider("cvh", "A")]).map { $0.dub }, ["A"])
+        XCTAssertTrue(castCandidates([provider("aniboom", "x")]).isEmpty)
+    }
 }
