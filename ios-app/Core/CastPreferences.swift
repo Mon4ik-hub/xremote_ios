@@ -2,7 +2,7 @@ import Foundation
 
 /// Настройки отправки в самом расширении (без App Groups): плеер по умолчанию
 /// и выбранная озвучка. Список озвучек зависит от выбранного плеера.
-struct CastPreferences {
+final class CastPreferences {
     static let playerKeyKey = "cast_player"
     static let dubKey = "cast_dub"
 
