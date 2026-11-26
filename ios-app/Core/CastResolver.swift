@@ -205,10 +205,13 @@ enum CastResolver {
     /// IS_PLAYING=false даже при идущем видео, поэтому засчитываем любой из
     /// признаков: IS_PLAYING, POSITION > 0 или DURATION > 0.
     /// Возврат: playing — точно играет; playerExists — плеер поднят (PLAY_NFO есть).
+    /// Два подряд PLAYER_NOT_RUNNING (~5 c) — ссылка мертва, выходим раньше
+    /// для быстрого повтора со свежей ссылкой.
     private static func didPlay(host: String, port: Int, seconds: Double = 20) async -> (playing: Bool, playerExists: Bool) {
         let deadline = Date().addingTimeInterval(seconds)
         var attempts = 0
         var playerExists = false
+        var notRunningInRow = 0
         while Date() < deadline {
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             attempts += 1
@@ -218,9 +221,14 @@ enum CastResolver {
                 continue
             }
             if response.response == "PLAYER_NOT_RUNNING" {
-                AppLog.shared.log("Play: опрос \(attempts) — PLAYER_NOT_RUNNING")
+                notRunningInRow += 1
+                AppLog.shared.log("Play: опрос \(attempts) — PLAYER_NOT_RUNNING (\(notRunningInRow) подряд)")
+                if notRunningInRow >= 2 {
+                    return (false, false)
+                }
                 continue
             }
+            notRunningInRow = 0
             guard let info = response.json["PLAY_NFO"] as? [String: Any] else {
                 AppLog.shared.log("Play: опрос \(attempts) — нет PLAY_NFO")
                 continue
