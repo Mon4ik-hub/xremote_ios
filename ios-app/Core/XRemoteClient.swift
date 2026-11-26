@@ -20,6 +20,10 @@ enum XRemoteError: LocalizedError {
         case .badAddress(let address):
             return "Неверный адрес сервера: \(address) — нужен вида 192.168.1.140:31337"
         case .connectionFailed(let reason):
+            // «Network is down» чаще всего = не выдан доступ к локальной сети
+            if reason.contains("Network is down") {
+                return "Не удалось подключиться к телевизору (\(reason)). Проверьте доступ к локальной сети: Настройки → Приватность и безопасность → Локальная сеть → AnimeGO Cast"
+            }
             return "Не удалось подключиться к телевизору: \(reason)"
         case .timeout:
             return "Сервер не ответил за 5 секунд. Проверьте, что AniLabX запущен и телевизор в той же Wi-Fi-сети."

@@ -159,9 +159,21 @@ enum CastResolver {
         )
     }
 
+    /// Первая попытка иногда падает с «Network is down» — пока iOS показывает
+    /// запрос доступа к локальной сети или Wi-Fi моргнул; один повтор через 0,7 c.
     private static func send(_ resolved: Resolved, host: String, port: Int) async throws {
-        let client = try XRemoteClient(host: host, port: port)
         let payload = String(decoding: resolved.message, as: UTF8.self)
+        do {
+            try await sendOnce(payload, host: host, port: port)
+        } catch XRemoteError.connectionFailed {
+            AppLog.shared.log("Play: подключение/отправка не удались, повтор через 0,7 c")
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            try await sendOnce(payload, host: host, port: port)
+        }
+    }
+
+    private static func sendOnce(_ payload: String, host: String, port: Int) async throws {
+        let client = try XRemoteClient(host: host, port: port)
         let response = try await client.send(payload)
         try requireSuccess(response)
     }
