@@ -131,7 +131,7 @@ enum CastResolver {
     static func play(
         query: Query,
         host: String,
-        port: UInt16,
+        port: Int,
         http: HttpClient,
         onProgress: @MainActor (String) -> Void = { _ in },
         onSent: @MainActor (Resolved) -> Void = { _ in }
@@ -159,7 +159,7 @@ enum CastResolver {
         )
     }
 
-    private static func send(_ resolved: Resolved, host: String, port: UInt16) async throws {
+    private static func send(_ resolved: Resolved, host: String, port: Int) async throws {
         let client = try XRemoteClient(host: host, port: port)
         let payload = String(decoding: resolved.message, as: UTF8.self)
         let response = try await client.send(payload)
@@ -168,7 +168,7 @@ enum CastResolver {
 
     /// Опрос GET_PLAY_INFO: видео началось? (COMMAND_SUCCESS сам по себе не значит,
     /// что играет — CVH стартует 2–3 c, Kodik 5–8 c)
-    private static func didPlay(host: String, port: UInt16, seconds: Double = 10) async -> Bool {
+    private static func didPlay(host: String, port: Int, seconds: Double = 10) async -> Bool {
         let deadline = Date().addingTimeInterval(seconds)
         var attempts = 0
         while Date() < deadline {

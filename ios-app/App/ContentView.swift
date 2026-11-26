@@ -2,37 +2,48 @@ import SwiftUI
 import UIKit
 
 /// Контейнерное приложение: инструкция + история просмотров.
-/// История заполняется автоматически: после успешной отправки Share Extension
-/// открывает приложение (animegocast://resume?...) и передаёт тайтл, серию,
-/// телевизор и плеер. Отсюда же можно продолжить просмотр без Safari.
+/// История приходит через буфер обмена: расширение пишет payload после
+/// успешной отправки, приложение импортирует при открытии (или по кнопке
+/// «Импортировать из буфера»). Отсюда же можно продолжить просмотр без Safari.
 struct ContentView: View {
     @StateObject private var history = HistoryStore()
     @StateObject private var profiles = TvProfileStore()
     @Environment(\.scenePhase) private var scenePhase
+    @State private var statusTextHint = ""
 
     var body: some View {
         NavigationStack {
             Form {
-                if !history.entries.isEmpty {
-                    Section("История") {
-                        ForEach(history.entries) { entry in
-                            NavigationLink {
-                                ResumeView(entry: entry, history: history, profiles: profiles)
-                            } label: {
-                                VStack(alignment: .leading) {
-                                    Text(entry.title)
-                                        .lineLimit(1)
-                                    Text("эпизод \(entry.episodeNumber) · "
-                                            + entry.watchedAt.formatted(date: .abbreviated, time: .shortened))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
+                Section("История") {
+                    if history.entries.isEmpty {
+                        Text("Пока пусто — отправьте серию через «Поделиться»")
+                            .foregroundStyle(.secondary)
+                    }
+                    Button("Импортировать из буфера") {
+                        importPasteboardHistory(force: true)
+                    }
+                    if !statusTextHint.isEmpty {
+                        Text(statusTextHint)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(history.entries) { entry in
+                        NavigationLink {
+                            ResumeView(entry: entry, history: history, profiles: profiles)
+                        } label: {
+                            VStack(alignment: .leading) {
+                                Text(entry.title)
+                                    .lineLimit(1)
+                                Text("эпизод \(entry.episodeNumber) · "
+                                        + entry.watchedAt.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
-                        .onDelete { positions in
-                            for index in positions where index < history.entries.count {
-                                history.remove(history.entries[index])
-                            }
+                    }
+                    .onDelete { positions in
+                        for index in positions where index < history.entries.count {
+                            history.remove(history.entries[index])
                         }
                     }
                 }
@@ -73,16 +84,21 @@ struct ContentView: View {
 
     /// История из расширения приходит по буферу обмена (см. HistoryPasteboard):
     /// читаем только если changeCount изменился — чужое содержимое не трогаем.
-    private func importPasteboardHistory() {
+    /// force — по кнопке: читаем буфер без проверки changeCount.
+    private func importPasteboardHistory(force: Bool = false) {
         let defaults = UserDefaults.standard
         let countKey = "history_paste_count"
         let count = UIPasteboard.general.changeCount
-        guard count != defaults.integer(forKey: countKey) else { return }
+        if !force, count == defaults.integer(forKey: countKey) { return }
         defaults.set(count, forKey: countKey)
-        AppLog.shared.log("Приложение: буфер изменился (count=\(count)), проверяю payload")
-        guard let payload = HistoryPasteboard.readPayload() else { return }
+        AppLog.shared.log("Приложение: импорт истории (force=\(force), count=\(count))")
+        guard let payload = HistoryPasteboard.readPayload() else {
+            statusTextHint = "В буфере нет записи об отправке"
+            return
+        }
         HistoryPasteboard.clear()
         applyHandoff(payload)
+        statusTextHint = "Импортировано: \(payload.title) эп.\(payload.episodeNumber)"
     }
 
     private func applyHandoff(_ payload: HistoryHandoff.Payload) {
