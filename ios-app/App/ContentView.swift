@@ -47,6 +47,22 @@ struct ContentView: View {
                         }
                     }
                 }
+                Section("Телевизоры") {
+                    NavigationLink {
+                        ProfilesView(store: profiles)
+                    } label: {
+                        if let last = profiles.profiles.first {
+                            VStack(alignment: .leading) {
+                                Text(last.name)
+                                Text("в списке: \(profiles.profiles.count) · «Профили» в панели — отдельный список")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            Text("Не настроены — добавьте телевизор")
+                        }
+                    }
+                }
                 Section("Что это") {
                     Text("AnimeGO Cast отправляет серию аниме с animego.me на AniLabX на телевизоре.")
                     Text("Ничего не скачивается: телевизор получает прямую ссылку и играет сам.")
