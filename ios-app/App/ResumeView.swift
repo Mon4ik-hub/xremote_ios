@@ -201,21 +201,19 @@ final class ResumeViewModel: ObservableObject {
         isError = false
         defer { casting = false }
         do {
-            let resolved = try await CastResolver.resolve(
-                .init(
+            let resolved = try await CastResolver.play(
+                query: .init(
                     episode: episode,
                     title: meta?.title ?? entryTitle,
                     urlString: url.absoluteString,
                     playerKey: playerKey,
                     selectedDub: selectedDub
                 ),
+                host: profile.host,
+                port: profile.port,
                 http: http,
                 onProgress: { statusText = $0 }
             )
-            let client = try XRemoteClient(host: profile.host, port: profile.port)
-            let payload = String(decoding: resolved.message, as: UTF8.self)
-            let response = try await client.send(payload)
-            try CastResolver.requireSuccess(response)
             statusText = "Запущено на «\(profile.name)»: эпизод \(episode.number), \(resolved.qualityName)"
             profiles.markUsed(id: profile.id)
             watchedStore.markWatched(episode.id)

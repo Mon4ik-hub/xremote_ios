@@ -151,43 +151,41 @@ final class ShareViewModel: ObservableObject {
             guard let meta, let urlString = inputURL?.absoluteString else {
                 throw AppError.cast("Страница ещё не загружена")
             }
-            let resolved = try await CastResolver.resolve(
-                .init(
+            let resolved = try await CastResolver.play(
+                query: .init(
                     episode: episode,
                     title: meta.title,
                     urlString: urlString,
                     playerKey: playerKey,
                     selectedDub: selectedDub
                 ),
+                host: profile.host,
+                port: profile.port,
                 http: http,
-                onProgress: { statusText = $0 }
+                onProgress: { statusText = $0 },
+                onSent: { _ in
+                    // история пишется сразу после принятия команды сервером,
+                    // не дожидаясь подтверждения воспроизведения
+                    let handoffPayload = HistoryHandoff.Payload(
+                        url: urlString,
+                        title: meta.title,
+                        episodeNumber: episode.number,
+                        episodeId: episode.id,
+                        tvName: profile.name,
+                        tvHost: profile.host,
+                        tvPort: profile.port,
+                        playerKey: playerKey,
+                        dub: selectedDub
+                    )
+                    HistoryPasteboard.write(handoffPayload)
+                    handoffURL = HistoryHandoff.makeURL(handoffPayload) // для кнопки «Записать в историю»
+                }
             )
-            let client = try XRemoteClient(host: profile.host, port: profile.port)
-            let payload = String(decoding: resolved.message, as: UTF8.self)
-            let response = try await client.send(payload)
-            try CastResolver.requireSuccess(response)
             statusText = "Запущено на «\(profile.name)»: эпизод \(episode.number), \(resolved.qualityName)"
-            AppLog.shared.log("Панель: COMMAND_SUCCESS, эп.\(episode.number) на «\(profile.name)»")
+            AppLog.shared.log("Панель: играет, эп.\(episode.number) на «\(profile.name)»")
             store.markUsed(id: profile.id)
             watchedStore.markWatched(episode.id) // отправленная серия = просмотренная
             watched = watchedStore.all()
-
-            // Автозапись истории через буфер обмена: приложение импортирует её
-            // при следующем открытии (без App Groups это единственный канал).
-            let handoffPayload = HistoryHandoff.Payload(
-                url: urlString,
-                title: meta.title,
-                episodeNumber: episode.number,
-                episodeId: episode.id,
-                tvName: profile.name,
-                tvHost: profile.host,
-                tvPort: profile.port,
-                playerKey: playerKey,
-                dub: selectedDub
-            )
-            HistoryPasteboard.write(handoffPayload)
-            // панель остаётся открытой: ссылка для кнопки «Записать в историю приложения»
-            handoffURL = HistoryHandoff.makeURL(handoffPayload)
         } catch {
             AppLog.shared.log("Панель: ошибка отправки — \(AppError.humanText(error))")
             fail(AppError.humanText(error))

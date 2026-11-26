@@ -125,6 +125,70 @@ enum CastResolver {
         )
     }
 
+    /// Полный цикл: найти ссылку → отправить → убедиться, что видео реально
+    /// началось (IS_PLAYING). Если нет — свежая ссылка и повтор (ссылки CVH
+    /// короткоживущие и иногда умирают до начала воспроизведения).
+    static func play(
+        query: Query,
+        host: String,
+        port: UInt16,
+        http: HttpClient,
+        onProgress: @MainActor (String) -> Void = { _ in },
+        onSent: @MainActor (Resolved) -> Void = { _ in }
+    ) async throws -> Resolved {
+        let first = try await resolve(query, http: http, onProgress: onProgress)
+        try await send(first, host: host, port: port)
+        onSent(first)
+
+        onProgress("Проверяю воспроизведение…")
+        if await didPlay(host: host, port: port) {
+            return first
+        }
+
+        AppLog.shared.log("Play: не заиграло — повтор со свежей ссылкой")
+        onProgress("Не заиграло — пробую ещё раз со свежей ссылкой…")
+        let second = try await resolve(query, http: http, onProgress: onProgress)
+        try await send(second, host: host, port: port)
+
+        onProgress("Проверяю воспроизведение…")
+        if await didPlay(host: host, port: port, seconds: 12) {
+            return second
+        }
+        throw AppError.cast(
+            "Сервер принял команду, но видео не началось. Попробуйте ещё раз или другой плеер в настройках"
+        )
+    }
+
+    private static func send(_ resolved: Resolved, host: String, port: UInt16) async throws {
+        let client = try XRemoteClient(host: host, port: port)
+        let payload = String(decoding: resolved.message, as: UTF8.self)
+        let response = try await client.send(payload)
+        try requireSuccess(response)
+    }
+
+    /// Опрос GET_PLAY_INFO: видео началось? (COMMAND_SUCCESS сам по себе не значит,
+    /// что играет — CVH стартует 2–3 c, Kodik 5–8 c)
+    private static func didPlay(host: String, port: UInt16, seconds: Double = 10) async -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        var attempts = 0
+        while Date() < deadline {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            attempts += 1
+            guard let client = try? XRemoteClient(host: host, port: port),
+                  let response = try? await client.send(String(decoding: CastMessage.getPlayInfo(), as: UTF8.self)),
+                  let info = response.json["PLAY_NFO"] as? [String: Any] else {
+                AppLog.shared.log("Play: опрос \(attempts) — нет PLAY_NFO")
+                continue
+            }
+            let playing = info["IS_PLAYING"] as? Bool ?? false
+            AppLog.shared.log("Play: опрос \(attempts) — IS_PLAYING=\(playing)")
+            if playing {
+                return true
+            }
+        }
+        return false
+    }
+
     /// COMMAND_SUCCESS и осмысленные русские фразы для остальных ответов.
     static func requireSuccess(_ response: XRemoteResponse) throws {
         switch response.response {
