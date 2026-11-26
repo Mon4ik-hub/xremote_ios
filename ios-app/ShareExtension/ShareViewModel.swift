@@ -151,7 +151,7 @@ final class ShareViewModel: ObservableObject {
             guard let meta, let urlString = inputURL?.absoluteString else {
                 throw AppError.cast("Страница ещё не загружена")
             }
-            let resolved = try await CastResolver.play(
+            let result = try await CastResolver.play(
                 query: .init(
                     episode: episode,
                     title: meta.title,
@@ -163,7 +163,7 @@ final class ShareViewModel: ObservableObject {
                 port: profile.port,
                 http: http,
                 onProgress: { statusText = $0 },
-                onSent: { _ in
+                onSent: { sent in
                     // история пишется сразу после принятия команды сервером,
                     // не дожидаясь подтверждения воспроизведения
                     let handoffPayload = HistoryHandoff.Payload(
@@ -179,10 +179,19 @@ final class ShareViewModel: ObservableObject {
                     )
                     HistoryPasteboard.write(handoffPayload)
                     handoffURL = HistoryHandoff.makeURL(handoffPayload) // для кнопки «Записать в историю»
+                    _ = sent
                 }
             )
-            statusText = "Запущено на «\(profile.name)»: эпизод \(episode.number), \(resolved.qualityName)"
-            AppLog.shared.log("Панель: играет, эп.\(episode.number) на «\(profile.name)»")
+            if result.confirmed {
+                statusText = "Запущено на «\(profile.name)»: эпизод \(episode.number), \(result.resolved.qualityName)"
+            } else {
+                // плеер рапортует «не играет» — возможно, ещё буферизует;
+                // повторную отправку не шлём, чтобы не перезапустить видео
+                statusText = "Команда принята «\(profile.name)» (эпизод \(episode.number), \(result.resolved.qualityName)). Если на телевизоре тишина — нажмите серию ещё раз"
+            }
+            AppLog.shared.log(
+                "Панель: эп.\(episode.number) на «\(profile.name)» — confirmed=\(result.confirmed)"
+            )
             store.markUsed(id: profile.id)
             watchedStore.markWatched(episode.id) // отправленная серия = просмотренная
             watched = watchedStore.all()

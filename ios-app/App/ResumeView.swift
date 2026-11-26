@@ -201,7 +201,7 @@ final class ResumeViewModel: ObservableObject {
         isError = false
         defer { casting = false }
         do {
-            let resolved = try await CastResolver.play(
+            let result = try await CastResolver.play(
                 query: .init(
                     episode: episode,
                     title: meta?.title ?? entryTitle,
@@ -214,7 +214,11 @@ final class ResumeViewModel: ObservableObject {
                 http: http,
                 onProgress: { statusText = $0 }
             )
-            statusText = "Запущено на «\(profile.name)»: эпизод \(episode.number), \(resolved.qualityName)"
+            if result.confirmed {
+                statusText = "Запущено на «\(profile.name)»: эпизод \(episode.number), \(result.resolved.qualityName)"
+            } else {
+                statusText = "Команда принята «\(profile.name)» (эпизод \(episode.number), \(result.resolved.qualityName)). Если на телевизоре тишина — нажмите серию ещё раз"
+            }
             profiles.markUsed(id: profile.id)
             watchedStore.markWatched(episode.id)
             watched = watchedStore.all()

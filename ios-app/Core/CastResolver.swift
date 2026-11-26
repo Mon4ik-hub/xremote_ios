@@ -125,9 +125,19 @@ enum CastResolver {
         )
     }
 
-    /// Полный цикл: найти ссылку → отправить → убедиться, что видео реально
-    /// началось (IS_PLAYING). Если нет — свежая ссылка и повтор (ссылки CVH
-    /// короткоживущие и иногда умирают до начала воспроизведения).
+    struct PlayResult {
+        let resolved: Resolved
+        /// true — подтверждено опросом (IS_PLAYING/POSITION/DURATION);
+        /// false — команда принята, но плеер рапортует «не играет» (возможно,
+        /// просто долго буферизует — повторная отправка перезапустила бы видео).
+        let confirmed: Bool
+    }
+
+    /// Полный цикл: найти ссылку → отправить → убедиться, что видео началось.
+    /// Повтор со свежей ссылкой — только если плеер вообще не поднялся
+    /// (PLAYER_NOT_RUNNING = верный признак мёртвой ссылки). Если PLAY_NFO есть,
+    /// но «не играет» — не шлём повторно: видео могло уже идти, повтор
+    /// перезапустил бы его с начала.
     static func play(
         query: Query,
         host: String,
@@ -135,24 +145,36 @@ enum CastResolver {
         http: HttpClient,
         onProgress: @MainActor (String) -> Void = { _ in },
         onSent: @MainActor (Resolved) -> Void = { _ in }
-    ) async throws -> Resolved {
+    ) async throws -> PlayResult {
         let first = try await resolve(query, http: http, onProgress: onProgress)
         try await send(first, host: host, port: port)
         onSent(first)
 
         onProgress("Проверяю воспроизведение…")
-        if await didPlay(host: host, port: port) {
-            return first
+        let firstCheck = await didPlay(host: host, port: port)
+        if firstCheck.playing {
+            return PlayResult(resolved: first, confirmed: true)
         }
 
-        AppLog.shared.log("Play: не заиграло — повтор со свежей ссылкой")
+        if firstCheck.playerExists {
+            AppLog.shared.log("Play: PLAY_NFO есть, воспроизведение не подтвердилось — повтор не шлю")
+            return PlayResult(resolved: first, confirmed: false)
+        }
+
+        // плеер не поднялся — ссылка умерла до старта; свежая ссылка
+        AppLog.shared.log("Play: плеер не поднялся — повтор со свежей ссылкой")
         onProgress("Не заиграло — пробую ещё раз со свежей ссылкой…")
         let second = try await resolve(query, http: http, onProgress: onProgress)
         try await send(second, host: host, port: port)
 
         onProgress("Проверяю воспроизведение…")
-        if await didPlay(host: host, port: port, seconds: 12) {
-            return second
+        let secondCheck = await didPlay(host: host, port: port)
+        if secondCheck.playing {
+            return PlayResult(resolved: second, confirmed: true)
+        }
+        if secondCheck.playerExists {
+            AppLog.shared.log("Play: повтор принят, но не подтвердился")
+            return PlayResult(resolved: second, confirmed: false)
         }
         throw AppError.cast(
             "Сервер принял команду, но видео не началось. Попробуйте ещё раз или другой плеер в настройках"
@@ -178,27 +200,43 @@ enum CastResolver {
         try requireSuccess(response)
     }
 
-    /// Опрос GET_PLAY_INFO: видео началось? (COMMAND_SUCCESS сам по себе не значит,
-    /// что играет — CVH стартует 2–3 c, Kodik 5–8 c)
-    private static func didPlay(host: String, port: Int, seconds: Double = 10) async -> Bool {
+    /// Опрос GET_PLAY_INFO: видео началось? COMMAND_SUCCESS сам по себе не значит,
+    /// что играет — CVH стартует 2–3 c, Kodik 5–8 c, иногда рапортует
+    /// IS_PLAYING=false даже при идущем видео, поэтому засчитываем любой из
+    /// признаков: IS_PLAYING, POSITION > 0 или DURATION > 0.
+    /// Возврат: playing — точно играет; playerExists — плеер поднят (PLAY_NFO есть).
+    private static func didPlay(host: String, port: Int, seconds: Double = 20) async -> (playing: Bool, playerExists: Bool) {
         let deadline = Date().addingTimeInterval(seconds)
         var attempts = 0
+        var playerExists = false
         while Date() < deadline {
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
             attempts += 1
             guard let client = try? XRemoteClient(host: host, port: port),
-                  let response = try? await client.send(String(decoding: CastMessage.getPlayInfo(), as: UTF8.self)),
-                  let info = response.json["PLAY_NFO"] as? [String: Any] else {
+                  let response = try? await client.send(String(decoding: CastMessage.getPlayInfo(), as: UTF8.self)) else {
+                AppLog.shared.log("Play: опрос \(attempts) — ошибка запроса")
+                continue
+            }
+            if response.response == "PLAYER_NOT_RUNNING" {
+                AppLog.shared.log("Play: опрос \(attempts) — PLAYER_NOT_RUNNING")
+                continue
+            }
+            guard let info = response.json["PLAY_NFO"] as? [String: Any] else {
                 AppLog.shared.log("Play: опрос \(attempts) — нет PLAY_NFO")
                 continue
             }
-            let playing = info["IS_PLAYING"] as? Bool ?? false
-            AppLog.shared.log("Play: опрос \(attempts) — IS_PLAYING=\(playing)")
-            if playing {
-                return true
+            playerExists = true
+            let isPlaying = info["IS_PLAYING"] as? Bool ?? false
+            let position = (info["POSITION"] as? Double) ?? 0
+            let duration = (info["DURATION"] as? Double) ?? 0
+            AppLog.shared.log(
+                "Play: опрос \(attempts) — IS_PLAYING=\(isPlaying), POS=\(position), DUR=\(duration)"
+            )
+            if isPlaying || position > 0 || duration > 0 {
+                return (true, true)
             }
         }
-        return false
+        return (false, playerExists)
     }
 
     /// COMMAND_SUCCESS и осмысленные русские фразы для остальных ответов.
